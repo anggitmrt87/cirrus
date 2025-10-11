@@ -8,7 +8,7 @@ env:
   CIRRUS_CLONE_DEPTH: 1
   CIRRUS_WORKING_DIR: /tmp/cirrus-ci-build
   ANYKERNEL: https://github.com/greenforce-project/AnyKernel3
-  TG_TOKEN: ENCRYPTED[b14a58bf7498c8dbb829ea846623a88dc20d438fb6b12889ff25212fc5c20d8bc9c028e079bbaf097f1f549d1d4a0572]
+  TG_TOKEN: ENCRYPTED[d9185ab32fea60b59b9caac7865c156001691d0c6c87c825c32a3db288ed566a8ac07cfe7ff445fb2c0e61f57c06b486]
   TG_CHAT_ID: ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]
 
 task:
@@ -20,9 +20,13 @@ task:
     cpu: 8
     memory: 32G
 
+  update_script:
+    - apt-get update
+    - apt-get install aria2 -y
+
   sync_script:
     - ./download.sh
 
-  build_kernel_script:
+  buildl_script:
     - ./build.sh
     - ./done.sh
