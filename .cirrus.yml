@@ -5,6 +5,7 @@ env:
   BUILD_HOST: mrtproject
   KERNEL_SOURCE: https://github.com/MRT-project/android_kernel_xiaomi_sm6115
   KERNEL_BRANCH: wip
+  DEVICE_DEFCONFIG: vendor/bengal-perf_defconfig
   CIRRUS_CLONE_DEPTH: 1
   CIRRUS_WORKING_DIR: /tmp/cirrus-ci-build
   ANYKERNEL: https://github.com/greenforce-project/AnyKernel3
@@ -20,7 +21,7 @@ env:
   KERNELSU_BRANCH: susfs-main
 
   # Build optimization
-  BUILD_OPTIONS: "-j$(nproc)"
+  BUILD_OPTIONS: "-j8"
   CCACHE: true
   CCACHE_DIR: /tmp/ccache
 

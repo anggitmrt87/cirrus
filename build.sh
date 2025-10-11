@@ -61,7 +61,6 @@ setup_env() {
     
     # Core directories
     export KERNEL_ROOTDIR="$CIRRUS_WORKING_DIR/$DEVICE_CODENAME"
-    export DEVICE_DEFCONFIG="vendor/bengal-perf_defconfig"
     export CLANG_ROOTDIR="$CIRRUS_WORKING_DIR/clang"
     export KERNEL_OUTDIR="$KERNEL_ROOTDIR/out"
     export ANYKERNEL_DIR="$CIRRUS_WORKING_DIR/AnyKernel"
@@ -200,29 +199,26 @@ BANNER
 }
 
 install_kernelsu() {
-    [[ "$KERNELSU" != "true" ]] && return 0
-    
-    local kernelsu_types=("sukisu" "rksu" "kernelsunext")
-    local valid_type=false
-    
-    for type in "${kernelsu_types[@]}"; do
-        [[ "$KERNELSU_TYPE" == "$type" ]] && valid_type=true
-    done
-    
-    if [[ "$valid_type" != "true" ]]; then
-        log_warning "Invalid KERNELSU_TYPE: $KERNELSU_TYPE. Valid options: ${kernelsu_types[*]}"
-        return 1
-    fi
-    
-    log_info "Installing KernelSU ($KERNELSU_TYPE)..."
-    
-    local setup_url="https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh"
-    
-    if curl -LSs "$setup_url" | bash -s "$KERNELSU_BRANCH"; then
-        log_success "KernelSU ($KERNELSU_TYPE) installed successfully"
-    else
-        log_warning "KernelSU installation failed, continuing build without KernelSU..."
-        return 1
+    if [ "$KERNELSU" = "true" ]; then
+        if [ "$KERNELSU_TYPE" = "sukisu" ]; then
+            log_info "Installing SUKISU ULTRA..."
+            curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" | bash -s $KERNELSU_BRANCH || {
+                log_warning "KernelSU installation failed, continuing build..."
+            }
+        elif [ "$KERNELSU_TYPE" = "rksu" ]; then
+            log_info "Installing RKSU.."
+            curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s $KERNELSU_BRANCH || {
+                log_warning "KernelSU installation failed, continuing build..."
+            }
+        elif [ "$KERNELSU_TYPE" = "kernelsunext" ]; then
+            log_info "Installing KERNELSU NEXT..."
+            curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/next/kernel/setup.sh" | bash -s $KERNELSU_BRANCH || {
+                log_warning "KernelSU installation failed, continuing build..."
+            }
+        else
+            log_warning "KernelSU installation failed, continuing build without KernelSU..."
+            return 1
+        fi
     fi
 }
 
@@ -301,25 +297,6 @@ compile_kernel() {
     if [[ "$CCACHE" == "true" ]]; then
         log_info "CCache statistics after build:"
         ccache -s
-    fi
-}
-
-patch_kpm() {
-    log_info "Applying KPM patch..."
-    cd "$KERNEL_OUTDIR/arch/arm64/boot"
-    
-    local patch_url="https://raw.githubusercontent.com/ShirkNeko/SukiSU_patch/refs/heads/main/kpm/patch_linux"
-    
-    if curl -LSs "$patch_url" -o patch && chmod +x patch; then
-        if ./patch && mv -f oImage Image && rm -rf Image.gz && gzip Image; then
-            log_success "KPM patch applied successfully"
-        else
-            log_warning "KPM patch application failed, continuing with original image"
-            # Restore original if patch fails
-            [[ -f "Image.gz" ]] || gzip Image
-        fi
-    else
-        log_warning "Failed to download KPM patch, continuing without patching"
     fi
 }
 
@@ -446,7 +423,6 @@ main() {
     
     # Build process
     compile_kernel || return 1
-    patch_kpm
     prepare_anykernel || return 1
     get_build_info
     create_and_push_zip || return 1
