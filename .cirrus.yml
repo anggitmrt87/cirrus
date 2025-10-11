@@ -1,0 +1,28 @@
+env:
+  TZ: Asia/Jakarta
+  DEVICE_CODENAME: chime
+  BUILD_USER: admin
+  BUILD_HOST: mrtproject
+  KERNEL_SOURCE: https://github.com/MRT-project/android_kernel_xiaomi_sm6115
+  KERNEL_BRANCH: 13.0.0-perf
+  CIRRUS_CLONE_DEPTH: 1
+  CIRRUS_WORKING_DIR: /tmp/cirrus-ci-build
+  ANYKERNEL: https://github.com/greenforce-project/AnyKernel3
+  TG_TOKEN: ENCRYPTED[d0276edb784fa8b652def34d72880b4851940c542e7359f5f4bf2fd580c50a2703fd253d507dbae7707b26f9c97a6062]
+  TG_CHAT_ID: ENCRYPTED[4d5930d962ad8511a049ebea4a7592106705ad09d8471be9b3071ee337381d2f31c1a9a53040eeb582842361f6ec1417]
+
+task:
+  name: "Kernel Build.."
+  timeout_in: 5h
+  stateful: true
+  container:
+    image: mhmmdfdlyas/dockerfile:k-ubuntu
+    cpu: 8
+    memory: 32G
+
+  sync_script:
+    - ./download.sh
+
+  build_kernel_script:
+    - ./build.sh
+    - ./done.sh
