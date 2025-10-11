@@ -13,7 +13,7 @@ env:
 
 task:
   name: "Kernel Build.."
-  timeout_in: 5h
+  timeout_in: 3h
   stateful: true
   container:
     image: mhmmdfdlyas/dockerfile:k-ubuntu
