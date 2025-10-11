@@ -12,12 +12,12 @@ env:
   TG_CHAT_ID: ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]
 
   # Select toolchain: "aosp" or "greenforce"
-  USE_CLANG: "aosp"
+  USE_CLANG: "greenforce"
   
   # Kernel SU
   KERNELSU: true
   # Select kernelsu type "rksu" "sukisu" "kernelsunext"
-  KERNELSU_TYPE: rksu
+  KERNELSU_TYPE: sukisu
   KERNELSU_BRANCH: susfs-main
 
 task:
