@@ -227,7 +227,7 @@ compile_kernel() {
     
     local bin_dir="$CLANG_ROOTDIR/bin"
     
-    tg_post_msg "🚀 <b>Kernel Build Started</b>%0A📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>%0A⚙️ <b>Defconfig:</b> <code>$DEVICE_DEFCONFIG</code>%0A🔧 <b>Toolchain:</b> <code>$USE_CLANG</code>"
+    tg_post_msg "🚀 <b>Kernel Build Started</b>%0A📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>%0A⚙️ <b>Defconfig:</b> <code>$DEVICE_DEFCONFIG</code>%0A🔧 <b>Toolchain:</b> <code>$KBUILD_COMPILER_STRING</code>"
     
     log_info "Step 1/4: Configuring defconfig..."
     make O="$KERNEL_OUTDIR" ARCH=arm64 "$DEVICE_DEFCONFIG" || {
@@ -376,17 +376,18 @@ create_and_push_zip() {
 👤 <b>Builder:</b> $BUILD_USER@$BUILD_HOST
 
 🔧 <b>Build Info:</b>
-├── Linux: ${KERNEL_VERSION:-N/A}
-├── Branch: ${BRANCH:-N/A}
-├── Commit: ${COMMIT_HASH:-N/A}
-├── Author: ${COMMIT_BY:-N/A}
-└── Compiler: $(echo "$KBUILD_COMPILER_STRING" | cut -d' ' -f1-3)
+├ Linux: ${KERNEL_VERSION:-N/A}
+├ Branch: ${BRANCH:-N/A}
+├ Commit: ${LATEST_COMMIT:-N/A}
+├ Author: ${COMMIT_BY:-N/A}
+├ Uts: ${UTS_VERSION:-N/A}
+└ Compiler: <code>${KBUILD_COMPILER_STRING:-N/A}</code>
 
 📊 <b>File Info:</b>
-├── Size: $zip_size
-├── SHA256: <code>${zip_sha256:0:16}...</code>
-├── MD5: <code>$zip_md5</code>
-└── SHA1: <code>${zip_sha1:0:16}...</code>
+├ Size: $zip_size
+├ SHA256: <code>${zip_sha256:0:16}...</code>
+├ MD5: <code>$zip_md5</code>
+└ SHA1: <code>${zip_sha1:0:16}...</code>
 
 ⏱️ <b>Build Time:</b> ${minutes}m ${seconds}s
 📝 <b>Changes:</b> <a href=\"https://github.com/$KERNEL_SOURCE/commits/$KERNEL_BRANCH\">View on GitHub</a>"

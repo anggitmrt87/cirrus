@@ -36,17 +36,6 @@ if curl -s -X POST "$BOT_MSG_URL2/sendSticker" \
     echo -e "${GREEN}[SUCCESS]${NC} Success sticker sent"
 fi
 
-# Send completion message
-COMPLETION_MSG="🎉 <b>Build Process Completed</b> 🎉
-
-✅ All build tasks finished successfully
-📱 Device: <code>$DEVICE_CODENAME</code>
-🕒 Completed at: $(date +'%Y-%m-%d %H:%M:%S %Z')
-
-Thank you for using the build system! 👷"
-
-tg_post_msg "$COMPLETION_MSG"
-
 # Cleanup temporary files
 echo -e "${GREEN}[INFO]${NC} Cleaning up temporary files..."
 rm -rf "$CIRRUS_WORKING_DIR"/*.tar.* 2>/dev/null || true
