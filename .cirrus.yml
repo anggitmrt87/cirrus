@@ -11,30 +11,53 @@ env:
   TG_TOKEN: ENCRYPTED[d9185ab32fea60b59b9caac7865c156001691d0c6c87c825c32a3db288ed566a8ac07cfe7ff445fb2c0e61f57c06b486]
   TG_CHAT_ID: ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]
 
-  # Select toolchain: "aosp" or "greenforce"
+  # Toolchain selection: "aosp" or "greenforce"
   USE_CLANG: "greenforce"
   
-  # Kernel SU
+  # Kernel SU configuration
   KERNELSU: true
-  # Select kernelsu type "rksu" "sukisu" "kernelsunext"
-  KERNELSU_TYPE: sukisu
+  KERNELSU_TYPE: sukisu # Select kernelsu type "rksu" "sukisu" "kernelsunext"
   KERNELSU_BRANCH: susfs-main
 
+  # Build optimization
+  BUILD_OPTIONS: "-j$(nproc)"
+  CCACHE: true
+  CCACHE_DIR: /tmp/ccache
+
 task:
-  name: "Kernel Build.."
+  name: "Kernel Build"
   timeout_in: 3h
   container:
     image: mhmmdfdlyas/dockerfile:k-ubuntu
     cpu: 8
     memory: 32G
 
+  # Cache configuration
+  ccache_cache:
+    folder: /tmp/ccache
+    fingerprint_script: cat .cirrus.yml > /dev/null
+
+  env:
+    CCACHE_MAXSIZE: 2G
+    CCACHE_COMPRESS: true
+
   update_script:
     - apt-get update
-    - apt-get install aria2 -y
+    - apt-get upgrade -y
+    - apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison
+
+  setup_script:
+    - mkdir -p /tmp/ccache
+    - ccache -M 2G
 
   sync_script:
+    - chmod +x download.sh
     - ./download.sh
 
-  buildl_script:
+  build_script:
+    - chmod +x build.sh
     - ./build.sh
+
+  cleanup_script:
+    - chmod +x done.sh
     - ./done.sh
