@@ -148,10 +148,23 @@ compile_kernel() {
     log_info "Configuring defconfig..."
     make -j"$num_cores" O="$KERNEL_OUTDIR" ARCH=arm64 "$DEVICE_DEFCONFIG" || finerr
     
-    log_info "Installing KernelSU..."
-    curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s main || {
-        log_warning "KernelSU installation failed, continuing build..."
-    }
+    if [ "$KERNELSU" = "true" ]; then
+        if [ "$KERNELSU_TYPE" = "sukisu" ]; then
+            log_info "Installing SUKISU ULTRA..."
+            curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s $KERNELSU_BRANCH || {
+                log_warning "KernelSU installation failed, continuing build..."
+            }
+        elif [ "$KERNELSU_TYPE" = "rksu" ]; then
+            log_info "Installing RKSU.."
+            curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s $KERNELSU_BRANCH || {
+                log_warning "KernelSU installation failed, continuing build..."
+            }
+        elif [ "$KERNELSU_TYPE" = "kernelsunext" ]; then
+            log_info "Installing KERNELSU NEXT..."
+            curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s $KERNELSU_BRANCH || {
+                log_warning "KernelSU installation failed, continuing build..."
+            }
+    fi
     
     log_info "Starting kernel compilation..."
     

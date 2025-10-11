@@ -11,10 +11,18 @@ env:
   TG_TOKEN: ENCRYPTED[d9185ab32fea60b59b9caac7865c156001691d0c6c87c825c32a3db288ed566a8ac07cfe7ff445fb2c0e61f57c06b486]
   TG_CHAT_ID: ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]
 
+  # Select toolchain: "aosp" or "greenforce"
+  USE_CLANG: "greenforce"
+  
+  # Kernel SU
+  KERNELSU: true
+  # Select kernelsu type "rksu" "sukisu" "kernelsunext"
+  KERNELSU_TYPE: rksu
+  KERNELSU_BRANCH: susfs-main
+
 task:
   name: "Kernel Build.."
   timeout_in: 3h
-  stateful: true
   container:
     image: mhmmdfdlyas/dockerfile:k-ubuntu
     cpu: 8
