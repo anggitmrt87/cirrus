@@ -4,7 +4,7 @@ env:
   BUILD_USER: admin
   BUILD_HOST: mrtproject
   KERNEL_SOURCE: https://github.com/MRT-project/android_kernel_xiaomi_sm6115
-  KERNEL_BRANCH: 13.0.0-perf
+  KERNEL_BRANCH: wip
   CIRRUS_CLONE_DEPTH: 1
   CIRRUS_WORKING_DIR: /tmp/cirrus-ci-build
   ANYKERNEL: https://github.com/greenforce-project/AnyKernel3
