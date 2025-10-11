@@ -164,6 +164,7 @@ compile_kernel() {
             curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s $KERNELSU_BRANCH || {
                 log_warning "KernelSU installation failed, continuing build..."
             }
+        fi
     fi
     
     log_info "Starting kernel compilation..."
