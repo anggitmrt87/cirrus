@@ -91,6 +91,7 @@ setup_env() {
 
     # Build variables
     export IMAGE="$KERNEL_OUTDIR/arch/arm64/boot/Image.gz-dtb"
+    export DTBO="$KERNEL_OUTDIR/arch/arm64/boot/dtbo.img"
     export DATE=$(date +"%Y%m%d-%H%M%S")
     export BOT_MSG_URL="https://api.telegram.org/bot$TG_TOKEN/sendMessage"
     export BOT_DOC_URL="https://api.telegram.org/bot$TG_TOKEN/sendDocument"
@@ -274,7 +275,9 @@ compile_kernel() {
         CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
         CLANG_TRIPLE="aarch64-linux-gnu-"
         Image.gz-dtb
-        dtbo.img
+        if [ "$BUILD_DTBO" = "true" ]; then
+            dtbo.img
+        fi
     )
     
     log_debug "Build command: ${build_cmd[*]}"
@@ -309,11 +312,20 @@ prepare_anykernel() {
     
     if git clone --depth=1 --single-branch "$ANYKERNEL" "$ANYKERNEL_DIR"; then
         # Copy kernel image
-        if cp -f "$IMAGE" "$ANYKERNEL_DIR"; then
-            log_success "AnyKernel preparation completed"
+        if [ "$BUILD_DTBO" = "true" ]; then
+            if cp -f "$IMAGE" "$DTBO" "$ANYKERNEL_DIR"; then
+                log_success "AnyKernel preparation completed"
+            else
+                log_error "Failed to copy kernel image to AnyKernel"
+                return 1
+            fi
         else
-            log_error "Failed to copy kernel image to AnyKernel"
-            return 1
+            if cp -f "$IMAGE" "$ANYKERNEL_DIR"; then
+                log_success "AnyKernel preparation completed"
+            else
+                log_error "Failed to copy kernel image to AnyKernel"
+                return 1
+            fi
         fi
     else
         log_error "Failed to clone AnyKernel repository"
