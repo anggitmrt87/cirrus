@@ -254,31 +254,35 @@ compile_kernel() {
         export CC="clang"
     fi
     
-    local build_cmd=(
-        make $BUILD_OPTIONS
-        ARCH=arm64
-        O="$KERNEL_OUTDIR"
-        CC="$CC"
-        AR="llvm-ar"
-        AS="llvm-as"
-        LD="ld.lld"
-        NM="llvm-nm"
-        OBJCOPY="llvm-objcopy"
-        OBJDUMP="llvm-objdump"
-        OBJSIZE="llvm-size"
-        READELF="llvm-readelf"
-        STRIP="llvm-strip"
-        HOSTCC="clang"
-        HOSTCXX="clang++"
-        HOSTLD="ld.lld"
-        CROSS_COMPILE="aarch64-linux-gnu-"
-        CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
-        CLANG_TRIPLE="aarch64-linux-gnu-"
-        Image.gz-dtb
-        if [ "$BUILD_DTBO" = "true" ]
-            dtbo.img
-        fi
-    )
+    local build_targets=("Image.gz-dtb")
+    [[ "$BUILD_DTBO" == "true" ]] && build_targets+=("dtbo.img")
+    
+    # Execute build with optimized parameters
+    if make $BUILD_OPTIONS \
+        ARCH=arm64 \
+        O="$KERNEL_OUTDIR" \
+        CC="$CC" \
+        AR="llvm-ar" \
+        NM="llvm-nm" \
+        STRIP="llvm-strip" \
+        OBJCOPY="llvm-objcopy" \
+        OBJDUMP="llvm-objdump" \
+        OBJSIZE="llvm-size" \
+        READELF="llvm-readelf" \
+        HOSTCC="clang" \
+        HOSTCXX="clang++" \
+        HOSTAR="llvm-ar" \
+        HOSTLD="ld.lld" \
+        CROSS_COMPILE="aarch64-linux-gnu-" \
+        CROSS_COMPILE_ARM32="arm-linux-gnueabi-" \
+        CLANG_TRIPLE="aarch64-linux-gnu-" \
+        "${build_targets[@]}"; then
+        
+        log_success "Kernel compilation completed"
+    else
+        log_error "Kernel compilation failed"
+        return 1
+    fi
     
     log_debug "Build command: ${build_cmd[*]}"
     
@@ -361,7 +365,7 @@ create_and_push_zip() {
     
     log_info "Creating flashable ZIP: $zip_name"
     
-    if zip -r9 "$zip_name" . -x "*.git*" "README.md" ".github/*"; then
+    if zip -r9 "$zip_name" *; then
         log_success "ZIP creation completed"
     else
         log_error "ZIP creation failed"
