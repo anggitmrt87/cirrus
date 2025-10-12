@@ -1,38 +1,15 @@
 env:
   TZ: Asia/Jakarta
-  DEVICE_CODENAME: chime
-  BUILD_USER: admin
-  BUILD_HOST: mrtproject
-  KERNEL_SOURCE: https://github.com/MRT-project/android_kernel_xiaomi_sm6115
-  KERNEL_BRANCH: wip
-  DEVICE_DEFCONFIG: vendor/bengal-perf_defconfig
-  CIRRUS_CLONE_DEPTH: 1
-  CIRRUS_WORKING_DIR: /tmp/cirrus-ci-build
-  ANYKERNEL: https://github.com/greenforce-project/AnyKernel3
-  TG_TOKEN: ENCRYPTED[d9185ab32fea60b59b9caac7865c156001691d0c6c87c825c32a3db288ed566a8ac07cfe7ff445fb2c0e61f57c06b486]
-  TG_CHAT_ID: ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]
-
-  # Build dtbo.img
-  BUILD_DTBO: true
-
-  # Toolchain selection: "aosp" or "greenforce"
-  USE_CLANG: "greenforce"
-  
-  # Kernel SU configuration
-  KERNELSU: true
-  KERNELSU_TYPE: sukisu # Select kernelsu type "rksu" "sukisu" "kernelsunext"
-  KERNELSU_BRANCH: susfs-main
-
-  # Build optimization
-  BUILD_OPTIONS: "-j8"
   CCACHE: true
   CCACHE_DIR: /tmp/ccache
+  CCACHE_MAXSIZE: 10G
+  CCACHE_COMPRESS: true
 
 task:
   name: "Kernel Build"
   timeout_in: 3h
   container:
-    image: mhmmdfdlyas/dockerfile:k-ubuntu
+    image: mhmmdfdlyas/dockerfile:r-ubuntu
     cpu: 8
     memory: 32G
 
@@ -41,13 +18,8 @@ task:
     folder: /tmp/ccache
     fingerprint_script: cat .cirrus.yml > /dev/null
 
-  env:
-    CCACHE_MAXSIZE: 2G
-    CCACHE_COMPRESS: true
-
   update_script:
-    - apt-get update
-    - apt-get upgrade -y
+    - apt-get update && apt-get upgrade -y
     - apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison
 
   setup_script:
@@ -55,10 +27,7 @@ task:
     - ccache -M 2G
 
   sync_script:
-    - ./download.sh
+    - ./sync.sh
 
   build_script:
-    - ./build.sh
-
-  cleanup_script:
-    - ./done.sh
+    - ./building.sh
