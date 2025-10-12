@@ -275,7 +275,7 @@ compile_kernel() {
         CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
         CLANG_TRIPLE="aarch64-linux-gnu-"
         Image.gz-dtb
-        if [ "$BUILD_DTBO" = "true" ]; then
+        if [ "$BUILD_DTBO" = "true" ]
             dtbo.img
         fi
     )
