@@ -13,7 +13,7 @@ export KBUILD_BUILD_USER=admin
 export KBUILD_BUILD_HOST=mrtproject
 export BUILD_USERNAME=admin
 export BUILD_HOSTNAME=mrtproject
-lunch lineage_chime-userdebug
+lunch lineage_chime-bp2a-userdebug
 mkfifo reading # Jangan di Hapus
 tee "${BUILDLOG}" < reading & # Jangan di Hapus
 build_message "Building Started" # Jangan di Hapus
