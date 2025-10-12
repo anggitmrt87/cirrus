@@ -274,6 +274,7 @@ compile_kernel() {
         CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
         CLANG_TRIPLE="aarch64-linux-gnu-"
         Image.gz-dtb
+        dtbo.img
     )
     
     log_debug "Build command: ${build_cmd[*]}"
