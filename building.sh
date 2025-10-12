@@ -14,6 +14,5 @@ export PATH="/usr/lib/ccache:$PATH"
 export CCACHE_EXEC=$(which ccache)
 export USE_CCACHE=1
 which ccache
-ccache -M 20
 ccache -z
 bash -c "$command" || true

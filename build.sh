@@ -13,12 +13,12 @@ export KBUILD_BUILD_USER=admin
 export KBUILD_BUILD_HOST=mrtproject
 export BUILD_USERNAME=admin
 export BUILD_HOSTNAME=mrtproject
-# lunch chime-userdebug
+lunch lineage_chime-userdebug
 mkfifo reading # Jangan di Hapus
 tee "${BUILDLOG}" < reading & # Jangan di Hapus
 build_message "Building Started" # Jangan di Hapus
 progress & # Jangan di Hapus
-timeout 95m brunch chime-userdebug -j8 > reading # Jangan di hapus text line (> reading)
+timeout 95m make bacon -j8 > reading # Jangan di hapus text line (> reading)
 
 retVal=$?
 timeEnd
