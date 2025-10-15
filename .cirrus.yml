@@ -3,8 +3,8 @@ env:
   DEVICE_CODENAME: chime
   BUILD_USER: admin
   BUILD_HOST: mrtproject
-  KERNEL_SOURCE: https://github.com/frstprjkt/valeryn_xiaomi_sm6115
-  KERNEL_BRANCH: su/android13
+  KERNEL_SOURCE: https://github.com/MRT-project/android_kernel_xiaomi_sm6115
+  KERNEL_BRANCH: wip
   DEVICE_DEFCONFIG: vendor/bengal-perf_defconfig
   CIRRUS_CLONE_DEPTH: 1
   CIRRUS_WORKING_DIR: /tmp/cirrus-ci-build
