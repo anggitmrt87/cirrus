@@ -38,6 +38,10 @@ validate_environment() {
         "KERNEL_SOURCE" "KERNEL_BRANCH"
     )
     
+    if [[ "$KPM_PATCH" == "true" ]]; then
+        required_vars+=("KPM_VERSION")
+    fi
+    
     local missing_vars=()
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var}" ]]; then
@@ -309,6 +313,44 @@ compile_kernel() {
     fi
 }
 
+patch_kpm() {
+    if [[ "$KPM_PATCH" == "true" ]] && [[ "$KERNELSU" == "true" ]]; then
+        log_info "KPM patch is enable (Version: $KPM_VERSION)"
+        cd "$KERNEL_OUTDIR/arch/arm64/boot"
+        
+        # UPDATED LINE: Using KPM_VERSION variable
+        local download_url="https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/$KPM_VERSION/patch_linux"
+        log_info "Downloading KPM patcher from $download_url"
+
+        if ! wget -q "$download_url"; then
+             log_error "Failed to download KPM patcher version $KPM_VERSION. Aborting patch."
+             return 1
+        fi
+
+        chmod +x patch_linux
+        log_info "Applying KPM patch..."
+        
+        ./patch_linux || {
+            log_error "KPM patch execution failed!"
+            return 1
+        }
+
+        # File verification and replacement
+        if [[ -f "oImage" ]]; then
+            rm -f Image
+            mv oImage Image
+            log_success "KPM patch applied successfully."
+        else
+            log_error "KPM patcher did not produce 'oImage'. Patch failed!"
+            # This may not be a fatal failure, depending on the patcher, 
+            # but should be considered a failure for security reasons.
+            return 1 
+        fi
+    else
+        log_info "KPM patch is disable"
+    fi
+}
+
 prepare_anykernel() {
     log_info "Preparing AnyKernel..."
     
@@ -442,6 +484,7 @@ main() {
     
     # Build process
     compile_kernel || return 1
+    patch_kpm
     prepare_anykernel || return 1
     get_build_info
     create_and_push_zip || return 1

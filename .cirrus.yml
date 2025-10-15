@@ -13,7 +13,7 @@ env:
   TG_CHAT_ID: ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]
 
   # Build type kernel Image
-  TYPE_IMAGE: Image.gz
+  TYPE_IMAGE: Image
 
   # Build dtbo.img
   BUILD_DTBO: false
@@ -25,6 +25,8 @@ env:
   KERNELSU: true
   KERNELSU_TYPE: sukisu # Select kernelsu type "rksu" "sukisu" "kernelsunext"
   KERNELSU_BRANCH: susfs-main
+  KPM_PATCH: true
+  KPM_VERSION: 0.12.0
 
   # Build optimization
   BUILD_OPTIONS: "-j8"
