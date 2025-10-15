@@ -4,7 +4,7 @@ env:
   BUILD_USER: admin
   BUILD_HOST: mrtproject
   KERNEL_SOURCE: https://github.com/frstprjkt/valeryn_xiaomi_sm6115
-  KERNEL_BRANCH: android13
+  KERNEL_BRANCH: su/android13
   DEVICE_DEFCONFIG: vendor/bengal-perf_defconfig
   CIRRUS_CLONE_DEPTH: 1
   CIRRUS_WORKING_DIR: /tmp/cirrus-ci-build
@@ -20,9 +20,9 @@ env:
 
   # Toolchain selection: "aosp" or "greenforce"
   USE_CLANG: "greenforce"
-  
+
   # Kernel SU configuration
-  KERNELSU: false
+  KERNELSU: true
   KERNELSU_TYPE: sukisu # Select kernelsu type "rksu" "sukisu" "kernelsunext"
   KERNELSU_BRANCH: susfs-main
 
