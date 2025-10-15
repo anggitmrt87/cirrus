@@ -3,14 +3,17 @@ env:
   DEVICE_CODENAME: chime
   BUILD_USER: admin
   BUILD_HOST: mrtproject
-  KERNEL_SOURCE: https://github.com/MRT-project/android_kernel_xiaomi_sm6115
-  KERNEL_BRANCH: wip
+  KERNEL_SOURCE: https://github.com/frstprjkt/valeryn_xiaomi_sm6115
+  KERNEL_BRANCH: android13
   DEVICE_DEFCONFIG: vendor/bengal-perf_defconfig
   CIRRUS_CLONE_DEPTH: 1
   CIRRUS_WORKING_DIR: /tmp/cirrus-ci-build
   ANYKERNEL: https://github.com/greenforce-project/AnyKernel3
   TG_TOKEN: ENCRYPTED[d9185ab32fea60b59b9caac7865c156001691d0c6c87c825c32a3db288ed566a8ac07cfe7ff445fb2c0e61f57c06b486]
   TG_CHAT_ID: ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]
+
+  # Build type kernel Image
+  TYPE_IMAGE: Image.gz
 
   # Build dtbo.img
   BUILD_DTBO: false
@@ -19,7 +22,7 @@ env:
   USE_CLANG: "greenforce"
   
   # Kernel SU configuration
-  KERNELSU: true
+  KERNELSU: false
   KERNELSU_TYPE: sukisu # Select kernelsu type "rksu" "sukisu" "kernelsunext"
   KERNELSU_BRANCH: susfs-main
 

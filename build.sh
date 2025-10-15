@@ -90,7 +90,7 @@ setup_env() {
     export KBUILD_COMPILER_STRING="$CLANG_VER with $LLD_VER"
 
     # Build variables
-    export IMAGE="$KERNEL_OUTDIR/arch/arm64/boot/Image.gz-dtb"
+    export IMAGE="$KERNEL_OUTDIR/arch/arm64/boot/$TYPE_IMAGE"
     export DTBO="$KERNEL_OUTDIR/arch/arm64/boot/dtbo.img"
     export DATE=$(date +"%Y%m%d-%H%M%S")
     export BOT_MSG_URL="https://api.telegram.org/bot$TG_TOKEN/sendMessage"
@@ -254,7 +254,7 @@ compile_kernel() {
         export CC="clang"
     fi
     
-    local build_targets=("Image.gz-dtb")
+    local build_targets=("$TYPE_IMAGE")
     [[ "$BUILD_DTBO" == "true" ]] && build_targets+=("dtbo.img")
     
     # Execute build with optimized parameters
@@ -294,9 +294,9 @@ compile_kernel() {
         return 1
     fi
     
-    # Verify output Image.gz
+    # Verify output
     if [[ ! -f "$IMAGE" ]]; then
-        log_error "Image.gz not found at expected location: $IMAGE"
+        log_error "kernel Image not found at expected location: $IMAGE"
         return 1
     fi
     
