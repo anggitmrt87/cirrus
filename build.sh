@@ -251,7 +251,7 @@ compile_kernel() {
     
     # Use CCache if enabled
     if [[ "$CCACHE" == "true" ]]; then
-        export CC="ccache clang"
+        export CC="clang"
         log_info "CCache statistics before build:"
         ccache -s
     else
@@ -266,17 +266,6 @@ compile_kernel() {
         ARCH=arm64 \
         O="$KERNEL_OUTDIR" \
         CC="$CC" \
-        AR="llvm-ar" \
-        NM="llvm-nm" \
-        STRIP="llvm-strip" \
-        OBJCOPY="llvm-objcopy" \
-        OBJDUMP="llvm-objdump" \
-        OBJSIZE="llvm-size" \
-        READELF="llvm-readelf" \
-        HOSTCC="clang" \
-        HOSTCXX="clang++" \
-        HOSTAR="llvm-ar" \
-        HOSTLD="ld.lld" \
         CROSS_COMPILE="aarch64-linux-gnu-" \
         CROSS_COMPILE_ARM32="arm-linux-gnueabi-" \
         CLANG_TRIPLE="aarch64-linux-gnu-" \
