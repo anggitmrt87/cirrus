@@ -2,6 +2,11 @@
 
 set -e  # Exit on any error
 
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
 echo "=========================================="
 echo "    Kernel Source & Toolchain Download"
 echo "=========================================="
@@ -9,75 +14,64 @@ echo ""
 
 # Function for error handling
 handle_error() {
-    echo -e "\033[0;31m[ERROR] $1\033[0m"
+    echo -e "${RED}[ERROR] $1${NC}"
     exit 1
 }
+
+# Ensure CLANG_ROOTDIR is set (as it is needed by build.sh)
+export CLANG_ROOTDIR="$CIRRUS_WORKING_DIR/clang" 
+export TEMP_DIR="$CIRRUS_WORKING_DIR/tmp_downloads"
+mkdir -p "$TEMP_DIR"
 
 # Function for downloading with retry
 download_with_retry() {
     local url="$1"
-    local dest="$2"
+    local dest_file="$2"
     local retries=3
     local attempt=1
     
+    echo "Download attempt 1/$retries for: $url"
     while [[ $attempt -le $retries ]]; do
-        echo "Download attempt $attempt: $url"
-        if aria2c --check-certificate=false "$url" -o "$dest"; then
-            echo "Download successful!"
+        if aria2c --check-certificate=false -x 16 -s 16 "$url" -d "$TEMP_DIR" -o "$dest_file"; then
+            echo -e "${GREEN}Download successful!${NC}"
             return 0
         fi
-        echo "Download attempt $attempt failed"
+        echo -e "${RED}Download attempt $attempt failed, retrying...${NC}"
         ((attempt++))
-        sleep 2
+        sleep 5
     done
     
     handle_error "Failed to download after $retries attempts: $url"
 }
 
-echo "📥 Downloading Kernel Sources..."
+echo "📥 Cloning Kernel Sources..."
 if git clone --depth=1 --recurse-submodules --shallow-submodules \
     "$KERNEL_SOURCE" -b "$KERNEL_BRANCH" \
     "$CIRRUS_WORKING_DIR/$DEVICE_CODENAME"; then
-    echo "✅ Kernel sources downloaded successfully"
+    echo -e "${GREEN}✅ Kernel sources cloned successfully${NC}"
 else
     handle_error "Failed to clone kernel repository"
 fi
 
 echo ""
 
-echo "🔧 Setting up Toolchain..."
-mkdir -p "$CIRRUS_WORKING_DIR/clang"
+echo "🔧 Setting up Toolchain ($USE_CLANG)..."
+mkdir -p "$CLANG_ROOTDIR"
+local_archive_name=""
+strip_components_count=0
 
 # Toolchain selection with validation
 case "$USE_CLANG" in
     "aosp")
-        echo "📦 Using AOSP Clang toolchain..."
-        download_with_retry \
-            "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/603a89415bbb04dff8bc577b95534479ec13fdc5/clang-r574158.tar.gz" \
-            "aosp-clang.tar.gz"
-        
-        echo "📁 Extracting AOSP toolchain..."
-        if tar -xf "aosp-clang.tar.gz" -C "$CIRRUS_WORKING_DIR/clang"; then
-            rm -f "aosp-clang.tar.gz"
-            echo "✅ AOSP toolchain extracted successfully"
-        else
-            handle_error "Failed to extract AOSP toolchain"
-        fi
+        local_archive_name="aosp-clang.tar.gz"
+        download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
+        strip_components_count=0 # AOSP archives often extract directly into the target folder structure
         ;;
     
     "greenforce")
-        echo "🌿 Using Greenforce Clang toolchain..."
-        download_with_retry \
-            "https://github.com/greenforce-project/greenforce_clang/releases/download/05102025/greenforce-clang-22.0.0git-05102025.tar.gz" \
-            "greenforce-clang.tar.gz"
-        
-        echo "📁 Extracting Greenforce toolchain..."
-        if tar -xf "greenforce-clang.tar.gz" -C "$CIRRUS_WORKING_DIR/clang" --strip-components=1; then
-            rm -f "greenforce-clang.tar.gz"
-            echo "✅ Greenforce toolchain extracted successfully"
-        else
-            handle_error "Failed to extract Greenforce toolchain"
-        fi
+        local_archive_name="greenforce-clang.tar.gz"
+        download_with_retry "$GREENFORCE_CLANG_URL" "$local_archive_name"
+        strip_components_count=1 # Greenforce (and most custom toolchains) need stripping
         ;;
     
     *)
@@ -85,19 +79,29 @@ case "$USE_CLANG" in
         ;;
 esac
 
+echo "📁 Extracting toolchain (strip-components=$strip_components_count)..."
+if tar -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=$strip_components_count; then
+    rm -rf "$TEMP_DIR" # Clean up temporary download directory
+    echo -e "${GREEN}✅ Toolchain extracted successfully${NC}"
+else
+    rm -rf "$TEMP_DIR"
+    handle_error "Failed to extract toolchain"
+fi
+
+
 # Verify toolchain installation
 echo ""
 echo "🔍 Verifying toolchain installation..."
-if [[ -f "$CIRRUS_WORKING_DIR/clang/bin/clang" ]]; then
-    CLANG_VERSION=$("$CIRRUS_WORKING_DIR/clang/bin/clang" --version | head -n1)
-    echo "✅ Toolchain verified: $CLANG_VERSION"
+if [[ -f "$CLANG_ROOTDIR/bin/clang" ]]; then
+    CLANG_VERSION=$("$CLANG_ROOTDIR/bin/clang" --version | head -n1)
+    echo -e "${GREEN}✅ Toolchain verified: $CLANG_VERSION${NC}"
 else
     handle_error "Toolchain verification failed: clang binary not found"
 fi
 
 echo ""
 echo "=========================================="
-echo "✅ All downloads completed successfully!"
+echo "✅ All sync tasks completed successfully!"
 echo "   Device: $DEVICE_CODENAME"
 echo "   Toolchain: $USE_CLANG"
 echo "   Kernel Branch: $KERNEL_BRANCH"
