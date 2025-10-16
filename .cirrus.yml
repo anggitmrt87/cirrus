@@ -19,7 +19,7 @@ env:
   BUILD_DTBO: false
 
   # Toolchain selection: "aosp" or "greenforce"
-  USE_CLANG: "greenforce"
+  USE_CLANG: "aosp"
 
   # Kernel SU configuration
   KERNELSU: true
