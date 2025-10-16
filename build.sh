@@ -389,8 +389,7 @@ get_build_info() {
     # Kernel version info
     local config_file="$KERNEL_OUTDIR/.config"
     if [[ -f "$config_file" ]]; then
-        # Grep for LINUX_VERSION_STRING (e.g., Linux version 4.19.297-blah)
-        export KERNEL_VERSION=$(grep 'LINUX_VERSION_STRING' "$config_file" | cut -d'"' -f2 || echo "N/A")
+        export KERNEL_VERSION=$(grep 'Linux/arm64' "$KERNEL_OUTDIR/.config" | cut -d' ' -f3 || echo "N/A")
     fi
     
     local compile_h="$KERNEL_OUTDIR/include/generated/compile.h"
@@ -443,15 +442,15 @@ create_and_push_zip() {
     local caption="
 ✅ <b>Build Finished Successfully!</b>
 
-📦 <b>Kernel:</b> $KERNEL_NAME
-📱 <b>Device:</b> $DEVICE_CODENAME
+📦 <b>Kernel:</b> <code>$KERNEL_NAME</code>
+📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>
 👤 <b>Builder:</b> <code>$BUILD_USER@$BUILD_HOST</code>
 
 🔧 <b>Build Info:</b>
-├ Linux: <code>${KERNEL_VERSION:-N/A}</code>
+├ Linux version: <code>${KERNEL_VERSION:-N/A}</code>
 ├ Branch: <code>${BRANCH:-N/A}</code>
-├ Commit: <code>$LATEST_COMMIT</code>
-├ Author: ${COMMIT_BY:-N/A}
+├ Commit: <code>${LATEST_COMMIT:-N/A}</code>
+├ Author: <code>${COMMIT_BY:-N/A}</code>
 ├ Uts: <code>${UTS_VERSION:-N/A}</code>
 └ Compiler: <code>${KBUILD_COMPILER_STRING:-N/A}</code>
 
