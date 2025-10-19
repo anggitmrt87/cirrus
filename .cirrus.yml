@@ -23,7 +23,7 @@ env:
   BUILD_DTBO: false # Build dtbo.img
 
   # Kernel SU configuration
-  KERNELSU: true
+  KERNELSU: false
   KERNELSU_TYPE: sukisu # Select kernelsu type "rksu" "sukisu" "kernelsunext"
   KERNELSU_BRANCH: susfs-main
   KPM_PATCH: false
