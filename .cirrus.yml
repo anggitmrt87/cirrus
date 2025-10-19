@@ -56,7 +56,7 @@ task:
   update_script:
     - apt-get update
     - apt-get upgrade -y
-    - apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison
+    - apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio
 
   setup_script:
     - mkdir -p /tmp/ccache
