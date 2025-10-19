@@ -19,8 +19,8 @@ env:
   GREENFORCE_CLANG_URL: https://github.com/greenforce-project/greenforce_clang/releases/download/20251012/gf-clang-22.0.0git-20251012.tar.gz
 
   # Kernel Build Configuration
-  TYPE_IMAGE: Image.gz-dtb # Build type kernel Image
-  BUILD_DTBO: true # Build dtbo.img
+  TYPE_IMAGE: Image.gz # Build type kernel Image
+  BUILD_DTBO: false # Build dtbo.img
 
   # Kernel SU configuration
   KERNELSU: false
