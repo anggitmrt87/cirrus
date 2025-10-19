@@ -1,5 +1,9 @@
 env:
   TZ: Asia/Jakarta
+  LANG: C.UTF-8
+  LC_ALL: C
+  
+  # Kernel
   DEVICE_CODENAME: chime
   BUILD_USER: admin
   BUILD_HOST: mrtproject
@@ -55,8 +59,10 @@ task:
 
   update_script:
     - apt-get update
-    - apt-get upgrade -y
     - apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils
+    - echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && /usr/sbin/locale-gen
+    - ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
+    - apt-get update
 
   setup_script:
     - mkdir -p /tmp/ccache
