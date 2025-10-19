@@ -3,8 +3,8 @@ env:
   DEVICE_CODENAME: chime
   BUILD_USER: admin
   BUILD_HOST: mrtproject
-  KERNEL_SOURCE: https://github.com/anggitmrt87/valeryn_xiaomi_sm6115
-  KERNEL_BRANCH: android16
+  KERNEL_SOURCE: https://github.com/frstprjkt/valeryn_xiaomi_sm6115
+  KERNEL_BRANCH: su/android16
   DEVICE_DEFCONFIG: vendor/bengal-perf_defconfig
   ANYKERNEL: https://github.com/greenforce-project/AnyKernel3
   
@@ -23,14 +23,14 @@ env:
   BUILD_DTBO: false # Build dtbo.img
 
   # Kernel SU configuration
-  KERNELSU: false
+  KERNELSU: true
   KERNELSU_TYPE: sukisu # Select kernelsu type "rksu" "sukisu" "kernelsunext"
   KERNELSU_BRANCH: susfs-main
   KPM_PATCH: false
   KPM_VERSION: 0.12.0
 
   # Build optimization
-  BUILD_OPTIONS: "-j16"
+  BUILD_OPTIONS: "-j8"
   CCACHE: true
   CCACHE_DIR: /tmp/ccache
   CCACHE_MAXSIZE: 2G
