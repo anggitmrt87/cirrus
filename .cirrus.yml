@@ -24,7 +24,7 @@ env:
 
   # Kernel Build Configuration
   TYPE_IMAGE: "Image.gz-dtb" # Build type kernel Image
-  BUILD_DTBO: "true" # Build dtbo.img
+  BUILD_DTBO: "false" # Build dtbo.img
 
   # Kernel SU configuration
   KERNELSU: "true"
