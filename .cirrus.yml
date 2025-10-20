@@ -1,44 +1,44 @@
 env:
-  TZ: Asia/Jakarta
-  LANG: C.UTF-8
-  LC_ALL: C
+  TZ: "Asia/Jakarta"
+  LANG: "C.UTF-8"
+  LC_ALL: "C"
   
   # Kernel
-  DEVICE_CODENAME: chime
-  BUILD_USER: admin
-  BUILD_HOST: mrtproject
-  KERNEL_SOURCE: https://github.com/frstprjkt/valeryn_xiaomi_sm6115
-  KERNEL_BRANCH: su/android16
-  DEVICE_DEFCONFIG: vendor/bengal-perf_defconfig vendor/xiaomi/sm6115.config vendor/xiaomi/lime.config
-  ANYKERNEL: https://github.com/greenforce-project/AnyKernel3
+  DEVICE_CODENAME: "chime"
+  BUILD_USER: "admin"
+  BUILD_HOST: "mrtproject"
+  KERNEL_SOURCE: "https://github.com/frstprjkt/valeryn_xiaomi_sm6115"
+  KERNEL_BRANCH: "su/android16"
+  DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/sm6115.config vendor/xiaomi/lime.config"
+  ANYKERNEL: "https://github.com/greenforce-project/AnyKernel3"
   
   # Telegram Encrypted Secrets (DO NOT CHANGE unless re-encrypting)
-  TG_TOKEN: ENCRYPTED[d9185ab32fea60b59b9caac7865c156001691d0c6c87c825c32a3db288ed566a8ac07cfe7ff445fb2c0e61f57c06b486]
-  TG_CHAT_ID: ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]
+  TG_TOKEN: "ENCRYPTED[d9185ab32fea60b59b9caac7865c156001691d0c6c87c825c32a3db288ed566a8ac07cfe7ff445fb2c0e61f57c06b486]"
+  TG_CHAT_ID: "ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]"
 
   # Toolchain Configuration
   USE_CLANG: "greenforce" # "aosp" or "greenforce"
-  CLANG_ROOTDIR: /tmp/cirrus-ci-build/clang # Defined here for ccache fingerprint
-  AOSP_CLANG_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/603a89415bbb04dff8bc577b95534479ec13fdc5/clang-r574158.tar.gz
-  GREENFORCE_CLANG_URL: https://github.com/greenforce-project/greenforce_clang/releases/download/20251012/gf-clang-22.0.0git-20251012.tar.gz
+  CLANG_ROOTDIR: "/tmp/cirrus-ci-build/clang" # Defined here for ccache fingerprint
+  AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/603a89415bbb04dff8bc577b95534479ec13fdc5/clang-r574158.tar.gz"
+  GREENFORCE_CLANG_URL: "https://github.com/greenforce-project/greenforce_clang/releases/download/20251012/gf-clang-22.0.0git-20251012.tar.gz"
 
   # Kernel Build Configuration
-  TYPE_IMAGE: Image.gz # Build type kernel Image
-  BUILD_DTBO: false # Build dtbo.img
+  TYPE_IMAGE: "Image.gz" # Build type kernel Image
+  BUILD_DTBO: "false" # Build dtbo.img
 
   # Kernel SU configuration
-  KERNELSU: true
-  KERNELSU_TYPE: sukisu # Select kernelsu type "rksu" "sukisu" "kernelsunext"
-  KERNELSU_BRANCH: susfs-main
-  KPM_PATCH: false
-  KPM_VERSION: 0.12.0
+  KERNELSU: "true"
+  KERNELSU_TYPE: "sukisu" # Select kernelsu type "rksu" "sukisu" "kernelsunext"
+  KERNELSU_BRANCH: "susfs-main"
+  KPM_PATCH: "false"
+  KPM_VERSION: "0.12.0"
 
   # Build optimization
   BUILD_OPTIONS: "-j8"
-  CCACHE: true
-  CCACHE_DIR: /tmp/ccache
-  CCACHE_MAXSIZE: 2G
-  CCACHE_COMPRESS: true
+  CCACHE: "true"
+  CCACHE_DIR: "/tmp/ccache"
+  CCACHE_MAXSIZE: "2G"
+  CCACHE_COMPRESS: "true"
 
 task:
   name: "Kernel Build"
