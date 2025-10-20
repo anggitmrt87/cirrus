@@ -7,8 +7,8 @@ env:
   DEVICE_CODENAME: "chime"
   BUILD_USER: "admin"
   BUILD_HOST: "mrtproject"
-  KERNEL_SOURCE: "https://github.com/frstprjkt/valeryn_xiaomi_sm6115"
-  KERNEL_BRANCH: "su/android16"
+  KERNEL_SOURCE: "https://github.com/anggitmrt87/valeryn_xiaomi_sm6115.git"
+  KERNEL_BRANCH: "android16"
   DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/sm6115.config vendor/xiaomi/lime.config"
   ANYKERNEL: "https://github.com/greenforce-project/AnyKernel3"
   
@@ -23,8 +23,8 @@ env:
   GREENFORCE_CLANG_URL: "https://github.com/greenforce-project/greenforce_clang/releases/download/20251012/gf-clang-22.0.0git-20251012.tar.gz"
 
   # Kernel Build Configuration
-  TYPE_IMAGE: "Image.gz" # Build type kernel Image
-  BUILD_DTBO: "false" # Build dtbo.img
+  TYPE_IMAGE: "Image.gz-dtb" # Build type kernel Image
+  BUILD_DTBO: "true" # Build dtbo.img
 
   # Kernel SU configuration
   KERNELSU: "true"
