@@ -9,7 +9,7 @@ env:
   BUILD_HOST: "mrtproject"
   KERNEL_SOURCE: "https://github.com/frstprjkt/valeryn_xiaomi_sm6115"
   KERNEL_BRANCH: "su/android16"
-  DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig \ vendor/xiaomi/sm6115.config \ vendor/xiaomi/lime.config"
+  DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/sm6115.config vendor/xiaomi/lime.config"
   ANYKERNEL: "https://github.com/greenforce-project/AnyKernel3"
   
   # Telegram Encrypted Secrets (DO NOT CHANGE unless re-encrypting)

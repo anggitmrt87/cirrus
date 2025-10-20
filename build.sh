@@ -259,7 +259,7 @@ compile_kernel() {
     log_info "Step 1/4: Configuring defconfig..."
     # Clean output directory config before creating new one
     rm -f "$KERNEL_OUTDIR/.config"
-    make O="$KERNEL_OUTDIR" ARCH=arm64 "$DEVICE_DEFCONFIG" all || {
+    make $BUILD_OPTIONS ARCH=arm64 $DEVICE_DEFCONFIG O=$KERNEL_OUTDIR || {
         log_error "Defconfig configuration failed"
         return 1
     }
