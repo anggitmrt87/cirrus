@@ -8,7 +8,7 @@ env:
   BUILD_USER: "admin"
   BUILD_HOST: "mrtproject"
   KERNEL_SOURCE: "https://github.com/anggitmrt87/valeryn_xiaomi_sm6115.git"
-  KERNEL_BRANCH: "android16"
+  KERNEL_BRANCH: "staging"
   DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/sm6115.config vendor/xiaomi/lime.config"
   ANYKERNEL: "https://github.com/greenforce-project/AnyKernel3"
   
