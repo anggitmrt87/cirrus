@@ -256,16 +256,16 @@ compile_kernel() {
     
     tg_post_msg "🚀 <b>Kernel Build Started</b>%0A📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>%0A⚙️ <b>Defconfig:</b> <code>$DEVICE_DEFCONFIG</code>%0A🔧 <b>Toolchain:</b> <code>$KBUILD_COMPILER_STRING</code>"
     
-    log_info "Step 1/4: Configuring defconfig..."
+    log_info "Step 1/4: Installing KernelSU..."
+    install_kernelsu
+    
+    log_info "Step 2/4: Configuring defconfig..."
     # Clean output directory config before creating new one
     rm -f "$KERNEL_OUTDIR/.config"
     make $BUILD_OPTIONS ARCH=arm64 $DEVICE_DEFCONFIG O=$KERNEL_OUTDIR || {
         log_error "Defconfig configuration failed"
         return 1
     }
-    
-    log_info "Step 2/4: Installing KernelSU..."
-    install_kernelsu
     
     log_info "Step 3/4: Starting kernel compilation... ($BUILD_OPTIONS)"
     
@@ -290,6 +290,17 @@ compile_kernel() {
         ARCH=arm64 \
         O="$KERNEL_OUTDIR" \
         CC="$CC" \
+        AR="llvm-ar" \
+        NM="llvm-nm" \
+        STRIP="llvm-strip" \
+        OBJCOPY="llvm-objcopy" \
+        OBJDUMP="llvm-objdump" \
+        OBJSIZE="llvm-size" \
+        READELF="llvm-readelf" \
+        HOSTCC="clang" \
+        HOSTCXX="clang++" \
+        HOSTAR="llvm-ar" \
+        HOSTLD="ld.lld" \
         CROSS_COMPILE="aarch64-linux-gnu-" \
         CROSS_COMPILE_ARM32="arm-linux-gnueabi-" \
         CLANG_TRIPLE="aarch64-linux-gnu-" \
