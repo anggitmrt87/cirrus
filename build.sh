@@ -4,7 +4,6 @@
 # Enhanced with better error handling, performance optimizations, and modular structure
 #
 
-# Use -e for exit on error, -o pipefail for error in pipe
 set -eo pipefail
 
 # Color codes for output
@@ -13,19 +12,20 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # Logging functions
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
-log_debug() { echo -e "${CYAN}[DEBUG]${NC} $1"; }
+log_debug() { [[ "$DEBUG_MODE" == "true" ]] && echo -e "${CYAN}[DEBUG]${NC} $1"; }
 
 # Global variables
 declare -g KERNEL_NAME="mrt-Kernel"
 declare -g START_TIME
 declare -g BUILD_STATUS="failed"
+declare -g BUILD_LOG="$CIRRUS_WORKING_DIR/build.log"
 
 ## Main Function Declarations
 #---------------------------------------------------------------------------------
@@ -54,12 +54,14 @@ validate_environment() {
         log_error "Missing required environment variables: ${missing_vars[*]}"
         exit 1
     fi
+    
+    log_success "Environment validation passed"
 }
 
 setup_env() {
     log_info "Setting up build environment..."
     
-    # Core directories (CLANG_ROOTDIR is set in .cirrus.yml and download.sh)
+    # Core directories
     export KERNEL_ROOTDIR="$CIRRUS_WORKING_DIR/$DEVICE_CODENAME"
     export KERNEL_OUTDIR="$KERNEL_ROOTDIR/out"
     export ANYKERNEL_DIR="$CIRRUS_WORKING_DIR/AnyKernel"
@@ -72,7 +74,7 @@ setup_env() {
     export PATH="$CLANG_ROOTDIR/bin:$PATH:/usr/lib/ccache"
     export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib:$LD_LIBRARY_PATH"
 
-    # Toolchain validation (re-check)
+    # Toolchain validation
     if [[ ! -d "$CLANG_ROOTDIR" || ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
         log_error "Toolchain (Clang) not found at $CLANG_ROOTDIR"
         exit 1
@@ -99,7 +101,7 @@ setup_env() {
     # Use NUM_CORES from system (nproc)
     export NUM_CORES=$(nproc)
     if [[ "$BUILD_OPTIONS" != "-j"* ]]; then
-        export BUILD_OPTIONS="-j$NUM_CORES" # Fallback if not set in .cirrus.yml
+        export BUILD_OPTIONS="-j$NUM_CORES"
     fi
     
     # CCache configuration
@@ -108,6 +110,8 @@ setup_env() {
         export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
         log_info "CCache enabled: $CCACHE_DIR (max: $CCACHE_MAXSIZE)"
     fi
+    
+    log_success "Environment setup completed"
 }
 
 tg_post_msg() {
@@ -127,11 +131,10 @@ tg_post_msg() {
 
 tg_send_sticker() {
     local sticker_id="$1"
-    # Note: Using the base bot URL + sendSticker endpoint
     local BOT_STICKER_URL="https://api.telegram.org/bot$TG_TOKEN/sendSticker"
     curl -s -X POST "$BOT_STICKER_URL" \
         -d sticker="$sticker_id" \
-        -d chat_id="$TG_CHAT_ID" > /dev/null
+        -d chat_id="$TG_CHAT_ID" > /dev/null || log_warning "Failed to send sticker"
 }
 
 cleanup() {
@@ -143,44 +146,55 @@ cleanup() {
         log_success "Build completed successfully in ${build_time}s"
         tg_send_sticker "CAACAgQAAx0EabRMmQACAm9jET5WwKp2FMYITmo6O8CJxt3H2wACFQwAAtUjEFPkKwhxHG8_Kx4E"
     else
-        log_error "Build failed with exit code $exit_code"
+        log_error "Build failed with exit code $exit_code after ${build_time}s"
         send_failure_log
         tg_send_sticker "CAACAgQAAx0EabRMmQACAnRjEUAXBTK1Ei_zbJNPFH7WCLzSdAACpBEAAqbxcR716gIrH45xdB4E"
     fi
     
-    # Removal of temporary files is now handled more robustly in done.sh, 
-    # but keep the necessary cleanup here if done.sh doesn't run.
-    rm -rf "$CIRRUS_WORKING_DIR"/*.tar.* 2>/dev/null || true
+    # Cleanup temporary files
+    cleanup_temp_files
     
-    # Exit with the original exit code
     exit $exit_code
+}
+
+cleanup_temp_files() {
+    log_info "Cleaning temporary files..."
+    rm -rf "$CIRRUS_WORKING_DIR"/*.tar.* 2>/dev/null || true
+    rm -rf "$CIRRUS_WORKING_DIR"/tmp_downloads 2>/dev/null || true
+    
+    if [[ "$KEEP_BUILD_LOGS" != "true" ]]; then
+        rm -f "$BUILD_LOG" 2>/dev/null || true
+    fi
 }
 
 send_failure_log() {
     local log_file="$CIRRUS_WORKING_DIR/build_error.log"
     
     log_error "Build failed. Collecting error information..."
-    
-    # Ensure no previous log remains
     rm -f "$log_file"
 
-    # Capture dmesg (system logs) which often contain kernel build errors
-    dmesg | tail -50 > "$log_file" 2>/dev/null || echo "Unable to capture system logs" > "$log_file"
+    # Capture last 100 lines of build log if exists
+    if [[ -f "$BUILD_LOG" ]]; then
+        tail -100 "$BUILD_LOG" > "$log_file" 2>/dev/null
+    else
+        dmesg | tail -50 > "$log_file" 2>/dev/null || echo "Unable to capture logs" > "$log_file"
+    fi
+    
     echo -e "\n=== Build Environment ===" >> "$log_file"
     env | grep -E "(CIRRUS|KERNEL|TG_|BUILD_|CLANG_)" >> "$log_file"
+    echo -e "\n=== System Info ===" >> "$log_file"
+    uname -a >> "$log_file"
     
     if [[ -f "$log_file" ]]; then
         log_info "Sending failure log to Telegram..."
-        
-        # Use basename for the document name in Telegram
-        local doc_name="$(basename "$log_file")"
+        local doc_name="build_error_${DEVICE_CODENAME}_$(date +%s).log"
 
         if curl -F document=@"$log_file" -F filename="$doc_name" "$BOT_DOC_URL" \
             -F chat_id="$TG_CHAT_ID" \
             -F "disable_web_page_preview=true" \
             -F "parse_mode=html" \
-            -F caption="❌ <b>Kernel Build Failed</b>%0ADevice: <code>$DEVICE_CODENAME</code>%0ATime: $(date +'%Y-%m-%d %H:%M:%S')" > /dev/null; then
-            log_success "Failure log sent."
+            -F caption="❌ <b>Kernel Build Failed</b>%0ADevice: <code>$DEVICE_CODENAME</code>%0ATime: $(date +'%Y-%m-%d %H:%M:%S')%0AExit Code: $exit_code" > /dev/null; then
+            log_success "Failure log sent"
         else
             log_warning "Failed to send error log"
         fi
@@ -217,32 +231,39 @@ BANNER
 }
 
 install_kernelsu() {
-    if [ "$KERNELSU" = "true" ]; then
-        local url=""
-        case "$KERNELSU_TYPE" in
-            "sukisu")
-                log_info "Installing SUKISU ULTRA..."
-                url="https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/refs/heads/main/kernel/setup.sh"
-                ;;
-            "rksu")
-                log_info "Installing RKSU..."
-                url="https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh"
-                ;;
-            "kernelsunext")
-                log_info "Installing KERNELSU NEXT..."
-                url="https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/next/kernel/setup.sh"
-                ;;
-            *)
-                log_warning "Invalid KERNELSU_TYPE: '$KERNELSU_TYPE'. Continuing build without KernelSU."
-                return 1
-                ;;
-        esac
+    if [[ "$KERNELSU" != "true" ]]; then
+        log_info "KernelSU is disabled, skipping installation"
+        return 0
+    fi
 
-        if [[ -n "$url" ]]; then
-            log_info "Executing $KERNELSU_TYPE setup script from $url"
-            curl -LSs "$url" | bash -s "$KERNELSU_BRANCH" || {
-                log_warning "$KERNELSU_TYPE installation failed, check logs. Continuing build..."
-            }
+    local url=""
+    case "$KERNELSU_TYPE" in
+        "sukisu")
+            log_info "Installing SUKISU ULTRA..."
+            url="https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/refs/heads/main/kernel/setup.sh"
+            ;;
+        "rksu")
+            log_info "Installing RKSU..."
+            url="https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh"
+            ;;
+        "kernelsunext")
+            log_info "Installing KERNELSU NEXT..."
+            url="https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/next/kernel/setup.sh"
+            ;;
+        *)
+            log_warning "Invalid KERNELSU_TYPE: '$KERNELSU_TYPE'. Continuing build without KernelSU."
+            return 1
+            ;;
+    esac
+
+    if [[ -n "$url" ]]; then
+        log_info "Executing $KERNELSU_TYPE setup script from $url"
+        # Use timeout to prevent hanging
+        if timeout 300 bash -c "curl -LSs '$url' | bash -s '$KERNELSU_BRANCH'"; then
+            log_success "KernelSU installation completed"
+        else
+            log_warning "$KERNELSU_TYPE installation failed, continuing build without KernelSU"
+            return 1
         fi
     fi
 }
@@ -250,8 +271,8 @@ install_kernelsu() {
 compile_kernel() {
     cd "$KERNEL_ROOTDIR"
     
-    # Ensure a clean build state before starting
-    log_info "Cleaning working directory (git clean -fdx)..."
+    # Clean working directory
+    log_info "Cleaning working directory..."
     git clean -fdx 
     
     tg_post_msg "🚀 <b>Kernel Build Started</b>%0A📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>%0A⚙️ <b>Defconfig:</b> <code>$DEVICE_DEFCONFIG</code>%0A🔧 <b>Toolchain:</b> <code>$KBUILD_COMPILER_STRING</code>"
@@ -260,22 +281,22 @@ compile_kernel() {
     install_kernelsu
     
     log_info "Step 2/4: Configuring defconfig..."
-    # Clean output directory config before creating new one
-    rm -f "$KERNEL_OUTDIR/.config"
-    make $BUILD_OPTIONS ARCH=arm64 $DEVICE_DEFCONFIG O=$KERNEL_OUTDIR || {
+    rm -f "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.old"
+    
+    if ! make $BUILD_OPTIONS ARCH=arm64 $DEVICE_DEFCONFIG O=$KERNEL_OUTDIR >> "$BUILD_LOG" 2>&1; then
         log_error "Defconfig configuration failed"
         return 1
-    }
+    fi
     
-    log_info "Step 3/4: Starting kernel compilation... ($BUILD_OPTIONS)"
+    log_info "Step 3/4: Starting kernel compilation..."
     
-    # Optimized build flags
+    # Build configuration
     export LLVM=1
     export LLVM_IAS=1
     
-    # Use CCache if enabled
+    # CCache configuration
     if [[ "$CCACHE" == "true" ]]; then
-        export CC="ccache clang" # Use ccache wrapper
+        export CC="ccache clang"
         log_info "CCache statistics before build:"
         ccache -s
     else
@@ -285,7 +306,9 @@ compile_kernel() {
     local build_targets=("$TYPE_IMAGE")
     [[ "$BUILD_DTBO" == "true" ]] && build_targets+=("dtbo.img")
     
-    # Execute the single, correct build command
+    # Execute build with logging
+    log_info "Build command: make $BUILD_OPTIONS ARCH=arm64 O=$KERNEL_OUTDIR ${build_targets[*]}"
+    
     if make $BUILD_OPTIONS \
         ARCH=arm64 \
         O="$KERNEL_OUTDIR" \
@@ -304,11 +327,11 @@ compile_kernel() {
         CROSS_COMPILE="aarch64-linux-gnu-" \
         CROSS_COMPILE_ARM32="arm-linux-gnueabi-" \
         CLANG_TRIPLE="aarch64-linux-gnu-" \
-        "${build_targets[@]}"; then
+        "${build_targets[@]}" >> "$BUILD_LOG" 2>&1; then
         
         log_success "Kernel compilation completed"
     else
-        log_error "Kernel compilation failed"
+        log_error "Kernel compilation failed - check $BUILD_LOG for details"
         return 1
     fi
     
@@ -328,65 +351,60 @@ compile_kernel() {
 }
 
 patch_kpm() {
-    if [[ "$KPM_PATCH" == "true" ]] && [[ "$KERNELSU" == "true" ]]; then
+    if [[ "$KPM_PATCH" == "true" && "$KERNELSU" == "true" ]]; then
         log_info "KPM patch is enabled (Version: $KPM_VERSION)"
         cd "$KERNEL_OUTDIR/arch/arm64/boot"
         
         local download_url="https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/$KPM_VERSION/patch_linux"
         log_info "Downloading KPM patcher from $download_url"
 
-        if ! wget -q "$download_url"; then
-             log_error "Failed to download KPM patcher version $KPM_VERSION. Aborting patch."
+        if ! wget -q --timeout=30 "$download_url"; then
+             log_error "Failed to download KPM patcher version $KPM_VERSION"
              return 1
         fi
 
         chmod +x patch_linux
         log_info "Applying KPM patch to $TYPE_IMAGE..."
         
-        # Execute patcher
-        ./patch_linux "$TYPE_IMAGE" || { # Pass the Image name explicitly to be safe
-            log_error "KPM patch execution failed! Check if it supports $TYPE_IMAGE"
-            return 1
-        }
-
-        # File verification and replacement
-        if [[ -f "oImage" ]]; then
-            rm -f "$TYPE_IMAGE"
-            mv oImage "$TYPE_IMAGE"
-            log_success "KPM patch applied successfully. New image is $TYPE_IMAGE."
+        if ./patch_linux "$TYPE_IMAGE"; then
+            if [[ -f "oImage" ]]; then
+                rm -f "$TYPE_IMAGE"
+                mv oImage "$TYPE_IMAGE"
+                log_success "KPM patch applied successfully"
+            else
+                log_error "KPM patcher did not produce 'oImage'"
+                return 1
+            fi
         else
-            log_error "KPM patcher did not produce 'oImage'. Patch failed!"
-            return 1 
+            log_error "KPM patch execution failed"
+            return 1
         fi
     else
-        log_info "KPM patch is disabled or KERNELSU is false."
+        log_info "KPM patch is disabled"
     fi
 }
 
 prepare_anykernel() {
     log_info "Preparing AnyKernel..."
     
-    # Clean AnyKernel directory first (already done by git clone below, but good practice)
     [[ -d "$ANYKERNEL_DIR" ]] && rm -rf "$ANYKERNEL_DIR"
     
-    if git clone --depth=1 --single-branch "$ANYKERNEL" "$ANYKERNEL_DIR"; then
+    if git clone --depth=1 --single-branch "$ANYKERNEL" "$ANYKERNEL_DIR" >> "$BUILD_LOG" 2>&1; then
         cd "$ANYKERNEL_DIR"
         
         # Copy kernel image(s)
-        if [ "$BUILD_DTBO" = "true" ]; then
-            if cp -f "$IMAGE" "$DTBO" .; then
-                log_success "AnyKernel preparation completed: Image and dtbo.img copied."
-            else
-                log_error "Failed to copy kernel image and dtbo.img to AnyKernel"
-                return 1
-            fi
+        local copy_success=true
+        if [[ "$BUILD_DTBO" == "true" ]]; then
+            cp -f "$IMAGE" "$DTBO" . || copy_success=false
         else
-            if cp -f "$IMAGE" .; then # Copy to current directory (AnyKernel root)
-                log_success "AnyKernel preparation completed: Image copied."
-            else
-                log_error "Failed to copy kernel Image to AnyKernel"
-                return 1
-            fi
+            cp -f "$IMAGE" . || copy_success=false
+        fi
+        
+        if [[ "$copy_success" == "true" ]]; then
+            log_success "AnyKernel preparation completed"
+        else
+            log_error "Failed to copy kernel files to AnyKernel"
+            return 1
         fi
     else
         log_error "Failed to clone AnyKernel repository"
@@ -400,22 +418,22 @@ get_build_info() {
     # Kernel version info
     local config_file="$KERNEL_OUTDIR/.config"
     if [[ -f "$config_file" ]]; then
-        export KERNEL_VERSION=$(grep 'Linux/arm64' "$KERNEL_OUTDIR/.config" | cut -d' ' -f3 || echo "N/A")
+        export KERNEL_VERSION=$(grep 'Linux/arm64' "$config_file" | cut -d' ' -f3 2>/dev/null || echo "N/A")
     fi
     
     local compile_h="$KERNEL_OUTDIR/include/generated/compile.h"
     if [[ -f "$compile_h" ]]; then
-        export UTS_VERSION=$(grep 'UTS_VERSION' "$compile_h" | cut -d'"' -f2 || echo "N/A")
+        export UTS_VERSION=$(grep 'UTS_VERSION' "$compile_h" | cut -d'"' -f2 2>/dev/null || echo "N/A")
     fi
     
     # Git information
     export LATEST_COMMIT=$(git log --pretty=format:'%s' -1 2>/dev/null | head -c 100 | tr -d '\n' || echo "N/A")
-    export COMMIT_BY=$(git log --pretty=format:'by %an' -1 2>/dev/null | tr -d '\n' || echo "N/A")
+    export COMMIT_BY=$(git log --pretty=format:'by %an' -1 2>/dev/null | head -c 50 | tr -d '\n' || echo "N/A")
     export BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "N/A")
     
-    # Get the repo owner/name from the URL, defaulting to CIRRUS vars
+    # Get the repo owner/name from the URL
     local repo_url="${KERNEL_SOURCE:-https://github.com/unknown/unknown}"
-    local owner_repo=$(echo "$repo_url" | sed -E 's/https:\/\/github.com\/([^\/]+\/[^\/]+).*/\1/i')
+    local owner_repo=$(echo "$repo_url" | sed -E 's|https://github.com/([^/]+/[^/.]+).*|\1|i' 2>/dev/null || echo "unknown/unknown")
     export KERNEL_SOURCE="$owner_repo"
     
     export KERNEL_BRANCH="$BRANCH"
@@ -429,7 +447,7 @@ create_and_push_zip() {
     
     log_info "Creating flashable ZIP: $zip_name"
     
-    if zip -r9 "$zip_name" * > /dev/null; then # Silence zip output
+    if zip -r9 "$zip_name" . -x "*.git*" "README.md" ".github/*" > /dev/null 2>&1; then
         log_success "ZIP creation completed"
     else
         log_error "ZIP creation failed"
@@ -474,7 +492,6 @@ create_and_push_zip() {
 ⏱️ <b>Build Time:</b> ${minutes}m ${seconds}s
 📝 <b>Changes:</b> <a href=\"https://github.com/$KERNEL_SOURCE/commits/$KERNEL_BRANCH\">View on GitHub</a>"
     
-    # Use basename for the document name in Telegram
     local doc_name="$(basename "$zip_name")"
 
     if curl -F document=@"$zip_name" -F filename="$doc_name" "$BOT_DOC_URL" \
@@ -487,7 +504,6 @@ create_and_push_zip() {
         log_info "Size: $zip_size"
         log_info "Build time: ${minutes}m ${seconds}s"
         
-        # Set build status for cleanup
         BUILD_STATUS="success"
     else
         log_error "Failed to upload build to Telegram"
@@ -502,6 +518,9 @@ main() {
     log_info "Starting optimized kernel build process..."
     START_TIME=$(date +%s)
     
+    # Initialize build log
+    > "$BUILD_LOG"
+    
     # Setup and validation
     validate_environment
     setup_env
@@ -509,7 +528,7 @@ main() {
     
     # Build process
     compile_kernel || return 1
-    patch_kpm
+    patch_kpm || log_warning "KPM patch failed, continuing..."
     prepare_anykernel || return 1
     get_build_info
     create_and_push_zip || return 1
@@ -518,7 +537,7 @@ main() {
     return 0
 }
 
-# Trap signals (always run cleanup on script exit)
+# Trap signals
 trap cleanup EXIT INT TERM
 
 # Run main function
