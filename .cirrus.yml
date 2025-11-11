@@ -7,8 +7,8 @@ env:
   DEVICE_CODENAME: "chime"
   BUILD_USER: "admin"
   BUILD_HOST: "mrtproject"
-  KERNEL_SOURCE: "https://github.com/anggitmrt87/valeryn_xiaomi_sm6115.git"
-  KERNEL_BRANCH: "staging"
+  KERNEL_SOURCE: "https://github.com/frstprjkt/valeryn_xiaomi_sm6115"
+  KERNEL_BRANCH: "su/android16"
   DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/sm6115.config vendor/xiaomi/lime.config"
   ANYKERNEL: "https://github.com/greenforce-project/AnyKernel3"
   
@@ -27,7 +27,7 @@ env:
   BUILD_DTBO: "false"
 
   # Kernel SU configuration
-  KERNELSU: "false"
+  KERNELSU: "true"
   KERNELSU_TYPE: "sukisu"
   KERNELSU_BRANCH: "susfs-main"
   KPM_PATCH: "false"
