@@ -250,6 +250,10 @@ install_kernelsu() {
             log_info "Installing KERNELSU NEXT..."
             url="https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/next/kernel/setup.sh"
             ;;
+        "backslashxx")
+            log_info "Installing KERNELSU BACKSLASHXX..."
+            url="https://raw.githubusercontent.com/backslashxx/KernelSU/refs/heads/master/kernel/setup.sh"
+            ;;
         *)
             log_warning "Invalid KERNELSU_TYPE: '$KERNELSU_TYPE'. Continuing build without KernelSU."
             return 1

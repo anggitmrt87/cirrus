@@ -7,9 +7,9 @@ env:
   DEVICE_CODENAME: "chime"
   BUILD_USER: "admin"
   BUILD_HOST: "mrtproject"
-  KERNEL_SOURCE: "https://github.com/frstprjkt/valeryn_xiaomi_sm6115"
+  KERNEL_SOURCE: "https://github.com/MRT-project/valeryn_xiaomi_sm6115"
   KERNEL_BRANCH: "su/android16"
-  DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/sm6115.config vendor/xiaomi/lime.config"
+  DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/lime.config"
   ANYKERNEL: "https://github.com/greenforce-project/AnyKernel3"
   
   # Telegram Encrypted Secrets
@@ -28,8 +28,8 @@ env:
 
   # Kernel SU configuration
   KERNELSU: "true"
-  KERNELSU_TYPE: "sukisu"
-  KERNELSU_BRANCH: "susfs-main"
+  KERNELSU_TYPE: "backslashxx"
+  KERNELSU_BRANCH: "master"
   KPM_PATCH: "false"
   KPM_VERSION: "0.12.0"
 
