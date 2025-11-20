@@ -287,7 +287,8 @@ compile_kernel() {
     log_info "Step 2/4: Configuring defconfig..."
     rm -f "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.old"
     
-    if ! make $BUILD_OPTIONS ARCH=arm64 $DEVICE_DEFCONFIG O=$KERNEL_OUTDIR >> "$BUILD_LOG" 2>&1; then
+    # Menggunakan tee untuk logging defconfig
+    if ! make $BUILD_OPTIONS ARCH=arm64 $DEVICE_DEFCONFIG O=$KERNEL_OUTDIR 2>&1 | tee -a "$BUILD_LOG"; then
         log_error "Defconfig configuration failed"
         return 1
     fi
@@ -302,7 +303,7 @@ compile_kernel() {
     if [[ "$CCACHE" == "true" ]]; then
         export CC="ccache clang"
         log_info "CCache statistics before build:"
-        ccache -s
+        ccache -s | tee -a "$BUILD_LOG"
     else
         export CC="clang"
     fi
@@ -310,29 +311,51 @@ compile_kernel() {
     local build_targets=("$TYPE_IMAGE")
     [[ "$BUILD_DTBO" == "true" ]] && build_targets+=("dtbo.img")
     
-    # Execute build with logging
+    # Execute build dengan tee untuk logging real-time
     log_info "Build command: make $BUILD_OPTIONS ARCH=arm64 O=$KERNEL_OUTDIR ${build_targets[*]}"
     
-    if make $BUILD_OPTIONS \
-        ARCH=arm64 \
-        O="$KERNEL_OUTDIR" \
-        CC="$CC" \
-        AR="llvm-ar" \
-        NM="llvm-nm" \
-        STRIP="llvm-strip" \
-        OBJCOPY="llvm-objcopy" \
-        OBJDUMP="llvm-objdump" \
-        OBJSIZE="llvm-size" \
-        READELF="llvm-readelf" \
-        HOSTCC="clang" \
-        HOSTCXX="clang++" \
-        HOSTAR="llvm-ar" \
-        HOSTLD="ld.lld" \
-        CROSS_COMPILE="aarch64-linux-gnu-" \
-        CROSS_COMPILE_ARM32="arm-linux-gnueabi-" \
-        CLANG_TRIPLE="aarch64-linux-gnu-" \
-        "${build_targets[@]}" >> "$BUILD_LOG" 2>&1; then
+    # Fungsi untuk build dengan tee
+    build_with_tee() {
+        local tee_pid
+        local build_pid
         
+        # Jalankan make dan pipe ke tee
+        {
+            make $BUILD_OPTIONS \
+                ARCH=arm64 \
+                O="$KERNEL_OUTDIR" \
+                CC="$CC" \
+                AR="llvm-ar" \
+                NM="llvm-nm" \
+                STRIP="llvm-strip" \
+                OBJCOPY="llvm-objcopy" \
+                OBJDUMP="llvm-objdump" \
+                OBJSIZE="llvm-size" \
+                READELF="llvm-readelf" \
+                HOSTCC="clang" \
+                HOSTCXX="clang++" \
+                HOSTAR="llvm-ar" \
+                HOSTLD="ld.lld" \
+                CROSS_COMPILE="aarch64-linux-gnu-" \
+                CROSS_COMPILE_ARM32="arm-linux-gnueabi-" \
+                CLANG_TRIPLE="aarch64-linux-gnu-" \
+                "${build_targets[@]}" 2>&1
+        } | tee -a "$BUILD_LOG" &
+        
+        tee_pid=$!
+        build_pid=$(jobs -p %+)
+        
+        # Tunggu proses build selesai
+        wait $build_pid
+        local build_exit=$?
+        
+        # Tunggu tee selesai
+        wait $tee_pid
+        
+        return $build_exit
+    }
+    
+    if build_with_tee; then
         log_success "Kernel compilation completed"
     else
         log_error "Kernel compilation failed - check $BUILD_LOG for details"
@@ -350,7 +373,7 @@ compile_kernel() {
     # Show CCache statistics if enabled
     if [[ "$CCACHE" == "true" ]]; then
         log_info "CCache statistics after build:"
-        ccache -s
+        ccache -s | tee -a "$BUILD_LOG"
     fi
 }
 
@@ -362,7 +385,7 @@ patch_kpm() {
         local download_url="https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/$KPM_VERSION/patch_linux"
         log_info "Downloading KPM patcher from $download_url"
 
-        if ! wget -q --timeout=30 "$download_url"; then
+        if ! wget -q --timeout=30 "$download_url" 2>&1 | tee -a "$BUILD_LOG"; then
              log_error "Failed to download KPM patcher version $KPM_VERSION"
              return 1
         fi
@@ -370,7 +393,7 @@ patch_kpm() {
         chmod +x patch_linux
         log_info "Applying KPM patch to $TYPE_IMAGE..."
         
-        if ./patch_linux "$TYPE_IMAGE"; then
+        if ./patch_linux "$TYPE_IMAGE" 2>&1 | tee -a "$BUILD_LOG"; then
             if [[ -f "oImage" ]]; then
                 rm -f "$TYPE_IMAGE"
                 mv oImage "$TYPE_IMAGE"
@@ -393,15 +416,15 @@ prepare_anykernel() {
     
     [[ -d "$ANYKERNEL_DIR" ]] && rm -rf "$ANYKERNEL_DIR"
     
-    if git clone --depth=1 --single-branch "$ANYKERNEL" "$ANYKERNEL_DIR" >> "$BUILD_LOG" 2>&1; then
+    if git clone --depth=1 --single-branch "$ANYKERNEL" "$ANYKERNEL_DIR" 2>&1 | tee -a "$BUILD_LOG"; then
         cd "$ANYKERNEL_DIR"
         
         # Copy kernel image(s)
         local copy_success=true
         if [[ "$BUILD_DTBO" == "true" ]]; then
-            cp -f "$IMAGE" "$DTBO" . || copy_success=false
+            cp -f "$IMAGE" "$DTBO" . 2>&1 | tee -a "$BUILD_LOG" || copy_success=false
         else
-            cp -f "$IMAGE" . || copy_success=false
+            cp -f "$IMAGE" . 2>&1 | tee -a "$BUILD_LOG" || copy_success=false
         fi
         
         if [[ "$copy_success" == "true" ]]; then
@@ -451,7 +474,7 @@ create_and_push_zip() {
     
     log_info "Creating flashable ZIP: $zip_name"
     
-    if zip -r9 "$zip_name" . -x "*.git*" "README.md" ".github/*" > /dev/null 2>&1; then
+    if zip -r9 "$zip_name" . -x "*.git*" "README.md" ".github/*" 2>&1 | tee -a "$BUILD_LOG"; then
         log_success "ZIP creation completed"
     else
         log_error "ZIP creation failed"
@@ -502,7 +525,7 @@ create_and_push_zip() {
         -F chat_id="$TG_CHAT_ID" \
         -F "disable_web_page_preview=true" \
         -F "parse_mode=html" \
-        -F caption="$caption" > /dev/null; then
+        -F caption="$caption" 2>&1 | tee -a "$BUILD_LOG"; then
         log_success "Build uploaded successfully!"
         log_info "File: $zip_name"
         log_info "Size: $zip_size"
