@@ -28,8 +28,8 @@ env:
 
   # Kernel SU configuration
   KERNELSU: "true"
-  KERNELSU_TYPE: "sukisu"
-  KERNELSU_BRANCH: "susfs-main"
+  KERNELSU_TYPE: "rksu"
+  KERNELSU_BRANCH: "susfs-rksu-master"
   KPM_PATCH: "false"
   KPM_VERSION: "0.12.0"
 
