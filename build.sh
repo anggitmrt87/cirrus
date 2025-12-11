@@ -35,7 +35,7 @@ validate_environment() {
     
     local required_vars=(
         "CIRRUS_WORKING_DIR" "DEVICE_CODENAME" "TG_TOKEN" 
-        "TG_CHAT_ID" "BUILD_USER" "BUILD_HOST" "ANYKERNEL"
+        "TG_CHAT_ID" "BUILD_USER" "BUILD_HOST" "ANYKERNEL" "ANYKERNEL_BRANCH"
         "KERNEL_SOURCE" "KERNEL_BRANCH" "CLANG_ROOTDIR"
     )
     
@@ -416,7 +416,7 @@ prepare_anykernel() {
     
     [[ -d "$ANYKERNEL_DIR" ]] && rm -rf "$ANYKERNEL_DIR"
     
-    if git clone --depth=1 --single-branch "$ANYKERNEL" "$ANYKERNEL_DIR" 2>&1 | tee -a "$BUILD_LOG"; then
+    if git clone --depth=1 -b "$ANYKERNEL_BRANCH" "$ANYKERNEL" "$ANYKERNEL_DIR" 2>&1 | tee -a "$BUILD_LOG"; then
         cd "$ANYKERNEL_DIR"
         
         # Copy kernel image(s)

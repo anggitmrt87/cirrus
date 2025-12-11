@@ -10,7 +10,8 @@ env:
   KERNEL_SOURCE: "ENCRYPTED[7c3d8848081f87af2cb9743d0620072dd1a9ad8d4b2d273ef8a4fd8cdffdb158ecc74c518979436d333b49a9cb92bfe2]"
   KERNEL_BRANCH: "test"
   DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/lime.config"
-  ANYKERNEL: "https://github.com/greenforce-project/AnyKernel3"
+  ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
+  ANYKERNEL_BRANCH: "lime"
   
   # Telegram Encrypted Secrets
   TG_TOKEN: "ENCRYPTED[d9185ab32fea60b59b9caac7865c156001691d0c6c87c825c32a3db288ed566a8ac07cfe7ff445fb2c0e61f57c06b486]"
@@ -19,12 +20,12 @@ env:
   # Toolchain Configuration
   USE_CLANG: "aosp" # "aosp" or "greenforce"
   CLANG_ROOTDIR: "/tmp/cirrus-ci-build/clang"
-  AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/603a89415bbb04dff8bc577b95534479ec13fdc5/clang-r574158.tar.gz"
+  AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz"
   GREENFORCE_CLANG_URL: "https://github.com/greenforce-project/greenforce_clang/releases/download/20251126/gf-clang-22.0.0-20251126.tar.gz"
 
   # Kernel Build Configuration
   TYPE_IMAGE: "Image.gz"
-  BUILD_DTBO: "false"
+  BUILD_DTBO: "true"
 
   # Kernel SU configuration
   KERNELSU: "true"
