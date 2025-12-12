@@ -308,6 +308,10 @@ compile_kernel() {
         export CC="clang"
     fi
     
+    if [[ "$DISABLE_LOCALVERSIO_ST" == "true" ]]; then
+        rm -rf localversion-st
+    fi
+    
     local build_targets=("$TYPE_IMAGE")
     [[ "$BUILD_DTBO" == "true" ]] && build_targets+=("dtbo.img")
     
