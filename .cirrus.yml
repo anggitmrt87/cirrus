@@ -8,7 +8,7 @@ env:
   BUILD_USER: "builder"
   BUILD_HOST: "mrtproject™"
   KERNEL_SOURCE: "ENCRYPTED[7c3d8848081f87af2cb9743d0620072dd1a9ad8d4b2d273ef8a4fd8cdffdb158ecc74c518979436d333b49a9cb92bfe2]"
-  KERNEL_BRANCH: "test"
+  KERNEL_BRANCH: "android16"
   DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/lime.config"
   ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
   ANYKERNEL_BRANCH: "lime"
