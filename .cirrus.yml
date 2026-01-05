@@ -21,7 +21,7 @@ env:
   USE_CLANG: "greenforce" # "aosp" or "greenforce"
   CLANG_ROOTDIR: "/tmp/cirrus-ci-build/clang"
   AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz"
-  GREENFORCE_CLANG_URL: "https://github.com/greenforce-project/greenforce_clang/releases/download/20251208/gf-clang-22.0.0-20251208.tar.gz"
+  GREENFORCE_CLANG_URL: "https://github.com/greenforce-project/greenforce_clang/releases/download/20260103/gf-clang-22.0.0-20260103.tar.gz"
 
   # Kernel Build Configuration
   TYPE_IMAGE: "Image.gz"
