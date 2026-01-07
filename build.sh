@@ -93,6 +93,7 @@ setup_env() {
     # Build variables
     export IMAGE="$KERNEL_OUTDIR/arch/arm64/boot/$TYPE_IMAGE"
     export DTBO="$KERNEL_OUTDIR/arch/arm64/boot/dtbo.img"
+    export DTB="$KERNEL_OUTDIR/$DTB_PATH"
     export DATE=$(date +"%Y%m%d-%H%M%S")
     export BOT_MSG_URL="https://api.telegram.org/bot$TG_TOKEN/sendMessage"
     export BOT_DOC_URL="https://api.telegram.org/bot$TG_TOKEN/sendDocument"
@@ -429,6 +430,10 @@ prepare_anykernel() {
             cp -f "$IMAGE" "$DTBO" . 2>&1 | tee -a "$BUILD_LOG" || copy_success=false
         else
             cp -f "$IMAGE" . 2>&1 | tee -a "$BUILD_LOG" || copy_success=false
+        fi
+        
+        if [[ "$INCLUDE_DTB" == "true" ]]; then
+            cp -f "$DTB" dtb 2>&1 | tee -a "$BUILD_LOG" || copy_success=false
         fi
         
         if [[ "$copy_success" == "true" ]]; then
