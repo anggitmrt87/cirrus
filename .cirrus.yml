@@ -18,9 +18,9 @@ env:
   TG_CHAT_ID: "ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]"
 
   # Toolchain Configuration
-  USE_CLANG: "greenforce" # "aosp" or "greenforce"
+  USE_CLANG: "aosp" # "aosp" or "greenforce"
   CLANG_ROOTDIR: "/tmp/cirrus-ci-build/clang"
-  AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz"
+  AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/clang-r574158.tar.gz"
   GREENFORCE_CLANG_URL: "https://github.com/greenforce-project/greenforce_clang/releases/download/20260103/gf-clang-22.0.0-20260103.tar.gz"
 
   # Kernel Build Configuration
