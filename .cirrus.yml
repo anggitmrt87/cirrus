@@ -31,8 +31,8 @@ env:
   DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
   # Kernel SU configuration
-  KERNELSU: "false"
-  KERNELSU_TYPE: "rksu"
+  KERNELSU: "true"
+  KERNELSU_TYPE: "kernelsunext"
   KERNELSU_BRANCH: "main"
   KPM_PATCH: "false"
   KPM_VERSION: "0.12.0"

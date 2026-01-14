@@ -249,7 +249,7 @@ install_kernelsu() {
             ;;
         "kernelsunext")
             log_info "Installing KERNELSU NEXT..."
-            url="https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/next/kernel/setup.sh"
+            url="https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/dev/kernel/setup.sh"
             ;;
         "backslashxx")
             log_info "Installing KERNELSU BACKSLASHXX..."
