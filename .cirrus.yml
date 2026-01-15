@@ -32,8 +32,8 @@ env:
 
   # Kernel SU configuration
   KERNELSU: "true"
-  KERNELSU_TYPE: "rksu"
-  KERNELSU_BRANCH: "main"
+  KERNELSU_TYPE: "kernelsunext"
+  KERNELSU_BRANCH: "dev"
   KPM_PATCH: "false"
   KPM_VERSION: "0.12.0"
 
