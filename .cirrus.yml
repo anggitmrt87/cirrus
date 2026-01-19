@@ -7,8 +7,8 @@ env:
   DEVICE_CODENAME: "chime"
   BUILD_USER: "builder"
   BUILD_HOST: "mrtproject™"
-  KERNEL_SOURCE: "ENCRYPTED[7c3d8848081f87af2cb9743d0620072dd1a9ad8d4b2d273ef8a4fd8cdffdb158ecc74c518979436d333b49a9cb92bfe2]"
-  KERNEL_BRANCH: "android16"
+  KERNEL_SOURCE: "https://github.com/anggitmrt87/kernel_xiaomi_mboh"
+  KERNEL_BRANCH: "andromeda-mk2"
   DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig"
   ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
   ANYKERNEL_BRANCH: "lime"
@@ -18,7 +18,7 @@ env:
   TG_CHAT_ID: "ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]"
 
   # Toolchain Configuration
-  USE_CLANG: "greenforce" # "aosp" or "greenforce"
+  USE_CLANG: "aosp" # "aosp" or "greenforce"
   CLANG_ROOTDIR: "/tmp/cirrus-ci-build/clang"
   AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/clang-r574158.tar.gz"
   GREENFORCE_CLANG_URL: "https://github.com/greenforce-project/greenforce_clang/releases/download/20260110/gf-clang-22.0.0-20260110.tar.gz"
@@ -31,7 +31,7 @@ env:
   DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
   # Kernel SU configuration
-  KERNELSU: "true"
+  KERNELSU: "false"
   KERNELSU_TYPE: "backslashxx"
   KERNELSU_BRANCH: "master"
   KPM_PATCH: "false"
