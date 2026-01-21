@@ -22,7 +22,7 @@ task:
     fingerprint_script: cat .cirrus.yml > /dev/null
 
   update_script:
-    - apt-get update && apt-get upgrade -y
+    - apt-get update -y
     - apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison
 
   setup_script:
