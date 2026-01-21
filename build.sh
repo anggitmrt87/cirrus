@@ -18,7 +18,7 @@ mkfifo reading # Jangan di Hapus
 tee "${BUILDLOG}" < reading & # Jangan di Hapus
 build_message "Building Started" # Jangan di Hapus
 progress & # Jangan di Hapus
-timeout 95m make bacon -j8 > reading # Jangan di hapus text line (> reading)
+timeout 95m make vendorimage -j8 > reading # Jangan di hapus text line (> reading)
 
 retVal=$?
 timeEnd
