@@ -3,7 +3,7 @@ env:
   LANG: "C.UTF-8"
   LC_ALL: "C"
   
-  # Kernel
+  # 🎯 Kernel Configuration
   DEVICE_CODENAME: "chime"
   BUILD_USER: "builder"
   BUILD_HOST: "mrtproject™"
@@ -13,50 +13,50 @@ env:
   ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
   ANYKERNEL_BRANCH: "lime"
   
-  # Telegram Encrypted Secrets
+  # 🔐 Telegram Encrypted Secrets
   TG_TOKEN: "ENCRYPTED[d9185ab32fea60b59b9caac7865c156001691d0c6c87c825c32a3db288ed566a8ac07cfe7ff445fb2c0e61f57c06b486]"
   TG_CHAT_ID: "ENCRYPTED[d1175d4be5c2ebcb2ce25c91ec7c71abeb738d22d563c4fc0afdb9f528c2d6997b98e29309468198038eb159cc709e91]"
 
-  # Toolchain Configuration
+  # ⚙️ Toolchain Configuration
   USE_CLANG: "greenforce" # "aosp" or "greenforce"
   CLANG_ROOTDIR: "/tmp/cirrus-ci-build/clang"
   AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/clang-r574158.tar.gz"
   GREENFORCE_CLANG_URL: "https://github.com/greenforce-project/greenforce_clang/releases/download/20260110/gf-clang-22.0.0-20260110.tar.gz"
 
-  # Kernel Build Configuration
+  # 🔧 Kernel Build Configuration
   TYPE_IMAGE: "Image.gz"
   BUILD_DTBO: "true"
   DISABLE_LOCALVERSIO_ST: "true"
   INCLUDE_DTB: "true"
   DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
-  # Kernel SU configuration
+  # ⚡ Kernel SU configuration
   KERNELSU: "true"
   KERNELSU_TYPE: "backslashxx"
   KERNELSU_BRANCH: "master"
   KPM_PATCH: "false"
   KPM_VERSION: "0.12.0"
 
-  # Build optimization
+  # 🚀 Build Optimization
   BUILD_OPTIONS: "-j8"
   CCACHE: "false"
   CCACHE_DIR: "/tmp/ccache"
   CCACHE_MAXSIZE: "2G"
   CCACHE_COMPRESS: "true"
   
-  # New: Enhanced logging and debugging
+  # 📊 Enhanced Logging and Debugging
   DEBUG_MODE: "false"
   KEEP_BUILD_LOGS: "false"
 
 task:
-  name: "Kernel Build"
+  name: "🚀 Kernel Build Process"
   timeout_in: 3h
   container:
     image: mhmmdfdlyas/dockerfile:k-ubuntu
     cpu: 8
     memory: 32G
 
-  # Cache configuration
+  # 💾 Cache Configuration
   ccache_cache:
     folder: /tmp/ccache
     fingerprint_script: 
@@ -66,25 +66,34 @@ task:
       - echo "$DEVICE_DEFCONFIG"
 
   update_script:
-    - apt-get update
+    - echo "🔄 Updating System Packages..."
+    - apt-get update -qq
     - apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo5
+    - echo "🌍 Setting up locale..."
     - echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && /usr/sbin/locale-gen
+    - echo "🕐 Setting timezone to $TZ..."
     - ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
     - apt-get clean
+    - echo "✅ System setup completed!"
 
   setup_script:
+    - echo "📁 Creating directories..."
     - mkdir -p /tmp/ccache
     - ccache -M $CCACHE_MAXSIZE
     - ccache -z
+    - echo "🔧 CCache configured (max: $CCACHE_MAXSIZE)"
 
   sync_script:
+    - echo "📥 Starting source download..."
     - chmod +x download.sh
     - ./download.sh
 
   build_script:
+    - echo "🔨 Starting build process..."
     - chmod +x build.sh
     - ./build.sh
 
   cleanup_script:
+    - echo "🧹 Cleaning up build environment..."
     - chmod +x done.sh
     - ./done.sh
