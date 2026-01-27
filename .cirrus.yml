@@ -8,7 +8,7 @@ env:
   BUILD_USER: "builder"
   BUILD_HOST: "mrtproject™"
   KERNEL_SOURCE: "https://github.com/MRT-project/bengal_419"
-  KERNEL_BRANCH: "android16"
+  KERNEL_BRANCH: "test"
   DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig"
   ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
   ANYKERNEL_BRANCH: "lime"
