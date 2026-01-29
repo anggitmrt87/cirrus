@@ -330,6 +330,11 @@ compile_kernel() {
     
     if [[ "$DISABLE_LOCALVERSIO_ST" == "true" ]]; then
         rm -rf localversion-st
+        rm -rf localversion-cip
+    fi
+    
+    if [[ "$KERNELSU_TYPE" == "kernelsunext" ]]; then
+        mv KernelSU-Next KernelSU
     fi
     
     local build_targets=("$TYPE_IMAGE")
