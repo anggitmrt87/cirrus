@@ -333,10 +333,6 @@ compile_kernel() {
         rm -rf localversion-cip
     fi
     
-    if [[ "$KERNELSU_TYPE" == "kernelsunext" ]]; then
-        mv KernelSU-Next KernelSU
-    fi
-    
     local build_targets=("$TYPE_IMAGE")
     [[ "$BUILD_DTBO" == "true" ]] && build_targets+=("dtbo.img")
     
