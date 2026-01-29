@@ -8,7 +8,7 @@ env:
   BUILD_USER: "builder"
   BUILD_HOST: "mrtproject™"
   KERNEL_SOURCE: "https://github.com/MRT-project/bengal_419"
-  KERNEL_BRANCH: "test"
+  KERNEL_BRANCH: "android16"
   DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig"
   ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
   ANYKERNEL_BRANCH: "lime"
@@ -32,8 +32,8 @@ env:
 
   # ⚡ Kernel SU configuration
   KERNELSU: "true"
-  KERNELSU_TYPE: "backslashxx"
-  KERNELSU_BRANCH: "master"
+  KERNELSU_TYPE: "kernelsunext"
+  KERNELSU_BRANCH: "dev"
   KPM_PATCH: "false"
   KPM_VERSION: "0.12.0"
 
