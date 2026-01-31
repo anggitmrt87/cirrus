@@ -328,7 +328,7 @@ compile_kernel() {
         export CC="clang"
     fi
     
-    if [[ "$DISABLE_LOCALVERSIO_ST" == "true" ]]; then
+    if [[ "$DISABLE_LOCALVERSION_ST" == "true" ]]; then
         rm -rf localversion-st
         rm -rf localversion-cip
     fi
@@ -557,18 +557,18 @@ create_and_push_zip() {
 👤 <b>Builder:</b> <code>$BUILD_USER@$BUILD_HOST</code>
 
 🔧 <b>Build Info:</b>
-├ 📅 Linux version: <code>${KERNEL_VERSION:-N/A}</code>
-├ 🌿 Branch: <code>${BRANCH:-N/A}</code>
-├ 🔀 Commit: <code>${LATEST_COMMIT:-N/A}</code>
-├ 👨‍💻 Author: <code>${COMMIT_BY:-N/A}</code>
-├ 🏷️  Uts: <code>${UTS_VERSION:-N/A}</code>
-└ ⚙️  Compiler: <code>${KBUILD_COMPILER_STRING:-N/A}</code>
+Linux version: <code>${KERNEL_VERSION:-N/A}</code>
+Branch: <code>${BRANCH:-N/A}</code>
+Commit: <code>${LATEST_COMMIT:-N/A}</code>
+Author: <code>${COMMIT_BY:-N/A}</code>
+Uts: <code>${UTS_VERSION:-N/A}</code>
+Compiler: <code>${KBUILD_COMPILER_STRING:-N/A}</code>
 
 📊 <b>File Info:</b>
-├ 📏 Size: $zip_size
-├ 🔐 SHA256: <code>${zip_sha256:0:16}...</code>
-├ 🔑 MD5: <code>$zip_md5</code>
-└ 🔒 SHA1: <code>${zip_sha1:0:16}...</code>
+Size: $zip_size
+SHA256: <code>${zip_sha256:0:16}...</code>
+MD5: <code>$zip_md5</code>
+SHA1: <code>${zip_sha1:0:16}...</code>
 
 ⏱️ <b>Build Time:</b> ${minutes}m ${seconds}s
 📝 <b>Changes:</b> <a href=\"https://github.com/$KERNEL_SOURCE/commits/$KERNEL_BRANCH\">View on GitHub</a>

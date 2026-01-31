@@ -21,12 +21,11 @@ env:
   USE_CLANG: "greenforce" # "aosp" or "greenforce"
   CLANG_ROOTDIR: "/tmp/cirrus-ci-build/clang"
   AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/clang-r574158.tar.gz"
-  GREENFORCE_CLANG_URL: "https://github.com/greenforce-project/greenforce_clang/releases/download/20260110/gf-clang-22.0.0-20260110.tar.gz"
 
   # 🔧 Kernel Build Configuration
   TYPE_IMAGE: "Image.gz"
   BUILD_DTBO: "true"
-  DISABLE_LOCALVERSIO_ST: "true"
+  DISABLE_LOCALVERSION_ST: "true"
   INCLUDE_DTB: "true"
   DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
@@ -61,9 +60,6 @@ task:
     folder: /tmp/ccache
     fingerprint_script: 
       - cat .cirrus.yml
-      - echo "$AOSP_CLANG_URL"
-      - echo "$GREENFORCE_CLANG_URL"
-      - echo "$DEVICE_DEFCONFIG"
 
   update_script:
     - echo "🔄 Updating System Packages..."

@@ -114,7 +114,7 @@ case "$USE_CLANG" in
     "greenforce")
         local_archive_name="greenforce-clang.tar.gz"
         log_info "Using Greenforce Clang toolchain ⚡"
-        download_with_retry "$GREENFORCE_CLANG_URL" "$local_archive_name"
+        source <(curl -sL https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_latest_url.sh) && download_with_retry "$LATEST_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
         strip_components_count=1
         ;;
