@@ -30,7 +30,7 @@ env:
   DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
   # ⚡ Kernel SU configuration
-  KERNELSU: "false"
+  KERNELSU: "true"
   KERNELSU_TYPE: "backslashxx"
   KERNELSU_BRANCH: "master"
   KPM_PATCH: "false"
@@ -38,9 +38,9 @@ env:
 
   # 🚀 Build Optimization
   BUILD_OPTIONS: "-j8"
-  CCACHE: "false"
+  CCACHE: "true"
   CCACHE_DIR: "/tmp/ccache"
-  CCACHE_MAXSIZE: "2G"
+  CCACHE_MAXSIZE: "10G"
   CCACHE_COMPRESS: "true"
   
   # 📊 Enhanced Logging and Debugging
