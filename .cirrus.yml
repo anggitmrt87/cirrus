@@ -58,8 +58,6 @@ task:
   # 💾 Cache Configuration
   ccache_cache:
     folder: /tmp/ccache
-    fingerprint_script: 
-      - cat .cirrus.yml
 
   update_script:
     - echo "🔄 Updating System Packages..."

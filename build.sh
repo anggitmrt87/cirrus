@@ -76,13 +76,11 @@ setup_env() {
     export KERNEL_ROOTDIR="$CIRRUS_WORKING_DIR/$DEVICE_CODENAME"
     export KERNEL_OUTDIR="$KERNEL_ROOTDIR/out"
     export ANYKERNEL_DIR="$CIRRUS_WORKING_DIR/AnyKernel"
-    export CCACHE_DIR="${CCACHE_DIR:-/tmp/ccache}"
 
     # 📂 Create necessary directories
-    mkdir -p "$KERNEL_OUTDIR" "$ANYKERNEL_DIR" "$CCACHE_DIR"
+    mkdir -p "$KERNEL_OUTDIR" "$ANYKERNEL_DIR"
 
     # 🛤️ PATH setup
-    export PATH="$CLANG_ROOTDIR/bin:$PATH:/usr/lib/ccache"
     export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib:$LD_LIBRARY_PATH"
 
     # 🔧 Toolchain validation
@@ -118,9 +116,21 @@ setup_env() {
     
     # 💾 CCache configuration
     if [[ "$CCACHE" == "true" ]]; then
-        export CCACHE_DIR
+        mkdir -p "$CCACHE_DIR"
+        export CCACHE_DIR="${CCACHE_DIR:-/tmp/ccache}"
+        export USE_CCACHE=1
+        export CCACHE_EXEC=$(which ccache)
         export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
+        export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:$PATH"
+        if [[ "$CCACHE_COMPRESS" == "true" ]]; then
+            ccache -o compression=true
+            ccache -o compression_level=1
+        fi
+        ccache -o max_size=${CCACHE_MAXSIZE}
+        ccache -z
         log_info "CCache enabled: $CCACHE_DIR (max: $CCACHE_MAXSIZE) 💿"
+    else
+        export PATH="$CLANG_ROOTDIR/bin:/usr/bin:$PATH"
     fi
     
     log_success "Environment setup completed! 🎉"
