@@ -315,10 +315,6 @@ compile_kernel() {
     
     log_step "Step 4/4: Starting kernel compilation... 🔨"
     
-    # 🏗️ Build configuration
-    export LLVM=1
-    export LLVM_IAS=1
-    
     # 💾 CCache configuration
     if [[ "$CCACHE" == "true" ]]; then
         export CC="ccache clang"
@@ -363,7 +359,10 @@ compile_kernel() {
         make $BUILD_OPTIONS \
             ARCH=arm64 \
             O="$KERNEL_OUTDIR" \
+            LLVM=1 \
+            LLVM_IAS=1 \
             CC="$CC" \
+            AS="llvm-as" \
             AR="llvm-ar" \
             NM="llvm-nm" \
             STRIP="llvm-strip" \
