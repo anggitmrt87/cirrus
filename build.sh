@@ -327,7 +327,7 @@ compile_kernel() {
     
     # 💾 CCache configuration
     if [[ "$CCACHE" == "true" ]]; then
-        export CC="ccache clang"
+        export CC="clang"
         log_info "CCache statistics before build: 📊"
         ccache -s | tee -a "$BUILD_LOG"
     else
