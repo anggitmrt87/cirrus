@@ -7,9 +7,9 @@ env:
   DEVICE_CODENAME: "chime"
   BUILD_USER: "builder"
   BUILD_HOST: "mrtproject™"
-  KERNEL_SOURCE: "ENCRYPTED[7c3d8848081f87af2cb9743d0620072dd1a9ad8d4b2d273ef8a4fd8cdffdb158ecc74c518979436d333b49a9cb92bfe2]"
-  KERNEL_BRANCH: "android16"
-  DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/kernelsu.config"
+  KERNEL_SOURCE: "https://github.com/jomadeto/valeryn_xiaomi_sm6115"
+  KERNEL_BRANCH: "16.0"
+  DEVICE_DEFCONFIG: "vendor/chime-stock_defconfig"
   ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
   ANYKERNEL_BRANCH: "lime"
   
@@ -30,7 +30,7 @@ env:
   DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
   # ⚡ Kernel SU configuration
-  KERNELSU: "true"
+  KERNELSU: "false"
   KERNELSU_TYPE: "backslashxx"
   KERNELSU_BRANCH: "master"
   KPM_PATCH: "false"
