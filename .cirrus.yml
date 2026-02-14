@@ -9,7 +9,7 @@ env:
   BUILD_HOST: "mrtproject™"
   KERNEL_SOURCE: "https://github.com/anggitmrt87/android_kernel_xiaomi_chime"
   KERNEL_BRANCH: "16.0"
-  DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/lime.config"
+  DEVICE_DEFCONFIG: "vendor/chime-stock_defconfig"
   ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
   ANYKERNEL_BRANCH: "lime"
   
@@ -24,9 +24,9 @@ env:
 
   # 🔧 Kernel Build Configuration
   TYPE_IMAGE: "Image.gz"
-  BUILD_DTBO: "true"
+  BUILD_DTBO: "false"
   DISABLE_LOCALVERSION_ST: "true"
-  INCLUDE_DTB: "true"
+  INCLUDE_DTB: "false"
   DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
   # ⚡ Kernel SU configuration
