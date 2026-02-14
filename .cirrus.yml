@@ -9,7 +9,7 @@ env:
   BUILD_HOST: "mrtproject™"
   KERNEL_SOURCE: "https://github.com/jomadeto/valeryn_xiaomi_sm6115"
   KERNEL_BRANCH: "16.0"
-  DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/lime.config"
+  DEVICE_DEFCONFIG: "vendor/chime-stock_defconfig vendor/xiaomi/lime.config"
   ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
   ANYKERNEL_BRANCH: "lime"
   
