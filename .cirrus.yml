@@ -32,7 +32,7 @@ env:
   # ⚡ Kernel SU configuration
   KERNELSU: "true"
   KERNELSU_TYPE: "mambosu"
-  KERNELSU_BRANCH: "master"
+  KERNELSU_BRANCH: "hookless"
   KPM_PATCH: "false"
   KPM_VERSION: "0.12.0"
 

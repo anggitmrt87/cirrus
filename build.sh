@@ -285,7 +285,7 @@ install_kernelsu() {
             ;;
         "mambosu")
             log_info "Installing MamboSU... 🛡️"
-            url="https://raw.githubusercontent.com/RapliVx/KernelSU/refs/heads/master/kernel/setup.sh"
+            url="https://raw.githubusercontent.com/Sorayukii/KernelSU-Next/stable/kernel/setup.sh"
             ;;
         *)
             log_warning "Invalid KERNELSU_TYPE: '$KERNELSU_TYPE'. Continuing build without KernelSU. ⚠️"
