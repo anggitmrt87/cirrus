@@ -9,7 +9,7 @@ env:
   BUILD_HOST: "mrtproject™"
   KERNEL_SOURCE: "https://github.com/anggitmrt87/android_kernel_xiaomi_chime"
   KERNEL_BRANCH: "16.0"
-  DEVICE_DEFCONFIG: "vendor/chime-perf_defconfig"
+  DEVICE_DEFCONFIG: "vendor/chime-perf_defconfig vendor/kernelsu.config"
   ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
   ANYKERNEL_BRANCH: "lime"
   
@@ -30,15 +30,15 @@ env:
   DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
   # ⚡ Kernel SU configuration
-  KERNELSU: "false"
-  KERNELSU_TYPE: "backslashxx"
+  KERNELSU: "true"
+  KERNELSU_TYPE: "mambosu"
   KERNELSU_BRANCH: "master"
   KPM_PATCH: "false"
   KPM_VERSION: "0.12.0"
 
   # 🚀 Build Optimization
   BUILD_OPTIONS: "-j8"
-  CCACHE: "true"
+  CCACHE: "false"
   CCACHE_DIR: "/tmp/ccache"
   CCACHE_MAXSIZE: "10G"
   CCACHE_COMPRESS: "true"

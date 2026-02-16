@@ -283,6 +283,10 @@ install_kernelsu() {
             log_info "Installing KERNELSU BACKSLASHXX... 🛡️"
             url="https://raw.githubusercontent.com/backslashxx/KernelSU/refs/heads/master/kernel/setup.sh"
             ;;
+        "mambosu")
+            log_info "Installing MamboSU... 🛡️"
+            url="https://raw.githubusercontent.com/RapliVx/KernelSU/refs/heads/master/kernel/setup.sh"
+            ;;
         *)
             log_warning "Invalid KERNELSU_TYPE: '$KERNELSU_TYPE'. Continuing build without KernelSU. ⚠️"
             return 1
@@ -335,6 +339,7 @@ compile_kernel() {
     fi
     
     if [[ "$DISABLE_LOCALVERSION_ST" == "true" ]]; then
+        rm -rf localversion
         rm -rf localversion-st
         rm -rf localversion-cip
     fi
