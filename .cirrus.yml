@@ -33,7 +33,7 @@ env:
   KERNELSU: "true"
   KERNELSU_TYPE: "mambosu"
   KERNELSU_BRANCH: "hookless"
-  KPM_PATCH: "true"
+  KPM_PATCH: "false"
   KPM_VERSION: "0.13.0"
 
   # 🚀 Build Optimization
