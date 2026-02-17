@@ -108,7 +108,7 @@ case "$USE_CLANG" in
         log_info "Using AOSP Clang toolchain ⚙️"
         download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        strip_components_count=0
+        strip_components_count=1
         ;;
     
     "greenforce")

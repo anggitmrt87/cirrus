@@ -320,11 +320,38 @@ compile_kernel() {
     log_step "Step 3/4: Configuring defconfig... ⚙️"
     rm -f "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.old"
     
-    # Menggunakan tee untuk logging defconfig
-    echo -e "${CYAN}⚙️  Configuring $DEVICE_DEFCONFIG...${NC}"
-    if ! make $BUILD_OPTIONS ARCH=arm64 $DEVICE_DEFCONFIG O=$KERNEL_OUTDIR 2>&1 | tee -a "$BUILD_LOG"; then
-        log_error "Defconfig configuration failed! 💥"
+    # 🔧 Handle multiple defconfig fragments
+    IFS=' ' read -r -a defconfig_array <<< "$DEVICE_DEFCONFIG"
+    primary_defconfig="${defconfig_array[0]}"
+    fragments=("${defconfig_array[@]:1}")
+    
+    echo -e "${CYAN}⚙️  Configuring primary defconfig: $primary_defconfig${NC}"
+    if ! make $BUILD_OPTIONS ARCH=arm64 "$primary_defconfig" O="$KERNEL_OUTDIR" 2>&1 | tee -a "$BUILD_LOG"; then
+        log_error "Primary defconfig configuration failed! 💥"
         return 1
+    fi
+    
+    # Gabungkan fragmen tambahan jika ada
+    if [[ ${#fragments[@]} -gt 0 ]]; then
+        log_info "Merging additional config fragments: ${fragments[*]}"
+        for frag in "${fragments[@]}"; do
+            frag_path="arch/arm64/configs/$frag"
+            if [[ -f "$KERNEL_ROOTDIR/$frag_path" ]]; then
+                echo -e "${CYAN}Merging $frag...${NC}"
+                if ! scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$KERNEL_OUTDIR/.config" "$KERNEL_ROOTDIR/$frag_path" 2>&1 | tee -a "$BUILD_LOG"; then
+                    log_error "Failed to merge $frag"
+                    return 1
+                fi
+            else
+                log_warning "Fragment $frag not found at $frag_path, skipping"
+            fi
+        done
+        # Perbarui konfigurasi setelah merge
+        log_info "Updating defconfig after merge..."
+        if ! make $BUILD_OPTIONS ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" 2>&1 | tee -a "$BUILD_LOG"; then
+            log_error "Failed to update defconfig after merge"
+            return 1
+        fi
     fi
     
     log_step "Step 4/4: Starting kernel compilation... 🔨"
@@ -441,9 +468,10 @@ patch_kpm() {
         local download_url="https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/$KPM_VERSION/patch_linux"
         log_info "Downloading KPM patcher from $download_url 📥"
 
-        if ! wget -q --timeout=30 --show-progress "$download_url" 2>&1 | tee -a "$BUILD_LOG"; then
-             log_error "Failed to download KPM patcher version $KPM_VERSION ❌"
-             return 1
+        # PERBAIKAN: gunakan curl dengan progress bar
+        if ! curl -L --progress-bar -o patch_linux "$download_url" 2>&1 | tee -a "$BUILD_LOG"; then
+            log_error "Failed to download KPM patcher version $KPM_VERSION ❌"
+            return 1
         fi
 
         chmod +x patch_linux
@@ -563,6 +591,7 @@ create_and_push_zip() {
     
     log_step "Uploading build to Telegram... 📤"
     
+    # PERBAIKAN: caption tanpa <blockquote>
     local caption="
 ✨ <b>🚀 Build Finished Successfully!</b> ✨
 
@@ -570,7 +599,7 @@ create_and_push_zip() {
 📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>
 👤 <b>Builder:</b> <code>$BUILD_USER@$BUILD_HOST</code>
 
-🔧 <b>Build Info:</b>
+<b>🔧 Build Info:</b>
 Linux version: <code>${KERNEL_VERSION:-N/A}</code>
 Branch: <code>${BRANCH:-N/A}</code>
 Commit: <code>${LATEST_COMMIT:-N/A}</code>
@@ -578,7 +607,7 @@ Author: <code>${COMMIT_BY:-N/A}</code>
 Uts: <code>${UTS_VERSION:-N/A}</code>
 Compiler: <code>${KBUILD_COMPILER_STRING:-N/A}</code>
 
-📊 <b>File Info:</b>
+<b>📊 File Info:</b>
 Size: $zip_size
 SHA256: <code>${zip_sha256:0:16}...</code>
 MD5: <code>$zip_md5</code>
