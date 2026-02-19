@@ -38,7 +38,7 @@ env:
 
   # 🚀 Build Optimization
   BUILD_OPTIONS: "-j8"
-  CCACHE: "false"
+  CCACHE: "false"               # Ubah ke "true" jika ingin menggunakan ccache
   CCACHE_DIR: "/tmp/ccache"
   CCACHE_MAXSIZE: "10G"
   CCACHE_COMPRESS: "true"
@@ -55,7 +55,7 @@ task:
     cpu: 8
     memory: 32G
 
-  # 💾 Cache Configuration
+  # 💾 Cache Configuration (akan tetap di-cache meskipun CCACHE=false, berguna jika nanti diaktifkan)
   ccache_cache:
     folder: /tmp/ccache
 
@@ -86,8 +86,3 @@ task:
     - echo "🔨 Starting build process..."
     - chmod +x build.sh
     - ./build.sh
-
-  cleanup_script:
-    - echo "🧹 Cleaning up build environment..."
-    - chmod +x done.sh
-    - ./done.sh

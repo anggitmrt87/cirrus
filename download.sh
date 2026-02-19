@@ -43,6 +43,11 @@ export CLANG_ROOTDIR="${CLANG_ROOTDIR:-$CIRRUS_WORKING_DIR/clang}"
 export TEMP_DIR="$CIRRUS_WORKING_DIR/tmp_downloads"
 mkdir -p "$TEMP_DIR"
 
+# 🔍 Cek keberadaan aria2c
+if ! command -v aria2c &> /dev/null; then
+    handle_error "aria2c tidak ditemukan. Pastikan sudah diinstall (apt-get install aria2)"
+fi
+
 # 📥 Function for downloading with retry and progress
 download_with_retry() {
     local url="$1"
@@ -106,6 +111,10 @@ case "$USE_CLANG" in
     "aosp")
         local_archive_name="aosp-clang.tar.gz"
         log_info "Using AOSP Clang toolchain ⚙️"
+        # Validasi URL (opsional)
+        if ! curl --head --silent --fail "$AOSP_CLANG_URL" > /dev/null; then
+            handle_error "AOSP Clang URL tidak dapat diakses: $AOSP_CLANG_URL"
+        fi
         download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
         strip_components_count=1
@@ -114,7 +123,13 @@ case "$USE_CLANG" in
     "greenforce")
         local_archive_name="greenforce-clang.tar.gz"
         log_info "Using Greenforce Clang toolchain ⚡"
-        source <(curl -sL https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_latest_url.sh) && download_with_retry "$LATEST_URL" "$local_archive_name"
+        # Ambil URL dengan aman
+        GREENFORCE_SCRIPT=$(curl -sL --fail https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_latest_url.sh) || handle_error "Gagal mengambil script Greenforce"
+        source /dev/stdin <<< "$GREENFORCE_SCRIPT"
+        if [[ -z "$LATEST_URL" ]]; then
+            handle_error "LATEST_URL tidak ditemukan dari script Greenforce"
+        fi
+        download_with_retry "$LATEST_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
         strip_components_count=1
         ;;

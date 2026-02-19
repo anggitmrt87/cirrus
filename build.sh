@@ -38,6 +38,9 @@ declare -g START_TIME
 declare -g BUILD_STATUS="failed"
 declare -g BUILD_LOG="$CIRRUS_WORKING_DIR/build.log"
 
+# Redirect semua output ke log file sekaligus layar (tee) sejak awal
+exec > >(tee -a "$BUILD_LOG") 2>&1
+
 ## 🎯 Main Function Declarations
 #---------------------------------------------------------------------------------
 
@@ -173,7 +176,7 @@ cleanup() {
         echo -e "\n${BOLD_RED}💥══════════════════════════════════════════════════════════════════💥${NC}"
         log_error "Build failed with exit code $exit_code after ${build_time}s 💔"
         echo -e "${BOLD_RED}💥══════════════════════════════════════════════════════════════════💥${NC}"
-        send_failure_log
+        send_failure_log "$exit_code"
         tg_send_sticker "CAACAgQAAx0EabRMmQACAnRjEUAXBTK1Ei_zbJNPFH7WCLzSdAACpBEAAqbxcR716gIrH45xdB4E"
     fi
     
@@ -194,6 +197,7 @@ cleanup_temp_files() {
 }
 
 send_failure_log() {
+    local exit_code="$1"
     local log_file="$CIRRUS_WORKING_DIR/build_error.log"
     
     log_error "Build failed. Collecting error information... 🔍"
@@ -294,12 +298,22 @@ install_kernelsu() {
     esac
 
     if [[ -n "$url" ]]; then
-        log_info "Executing $KERNELSU_TYPE setup script from $url 🔗"
-        # Use timeout to prevent hanging
-        if timeout 300 bash -c "curl -LSs '$url' | bash -s '$KERNELSU_BRANCH'"; then
-            log_success "KernelSU installation completed! ✅"
+        log_info "Downloading $KERNELSU_TYPE setup script from $url 🔗"
+        # Unduh script ke file sementara untuk verifikasi (jika ada) dan eksekusi
+        local temp_script="$CIRRUS_WORKING_DIR/kernelsu_setup.sh"
+        if curl -fsSL --proto '=https' --tlsv1.2 --fail -o "$temp_script" "$url"; then
+            chmod +x "$temp_script"
+            # Opsional: verifikasi checksum jika tersedia
+            log_info "Executing $KERNELSU_TYPE setup script..."
+            if timeout 300 bash -c "$temp_script" -s "$KERNELSU_BRANCH"; then
+                log_success "KernelSU installation completed! ✅"
+            else
+                log_warning "$KERNELSU_TYPE installation failed, continuing build without KernelSU ⚠️"
+                return 1
+            fi
+            rm -f "$temp_script"
         else
-            log_warning "$KERNELSU_TYPE installation failed, continuing build without KernelSU ⚠️"
+            log_warning "Failed to download $KERNELSU_TYPE setup script, continuing without KernelSU ⚠️"
             return 1
         fi
     fi
@@ -308,9 +322,10 @@ install_kernelsu() {
 compile_kernel() {
     cd "$KERNEL_ROOTDIR"
     
-    # 🧹 Clean working directory
-    log_step "Step 1/4: Cleaning working directory... 🧹"
-    git clean -fdx 
+    # 🧹 Bersihkan hanya direktori out (lebih aman daripada git clean -fdx)
+    log_step "Step 1/4: Cleaning output directory... 🧹"
+    rm -rf "$KERNEL_OUTDIR"
+    mkdir -p "$KERNEL_OUTDIR"
     
     tg_post_msg "🚀 <b>Kernel Build Started!</b>%0A%0A📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>%0A⚙️ <b>Defconfig:</b> <code>$DEVICE_DEFCONFIG</code>%0A🔧 <b>Toolchain:</b> <code>$KBUILD_COMPILER_STRING</code>%0A⏰ <b>Start Time:</b> $(date +'%H:%M:%S')"
     
@@ -318,7 +333,6 @@ compile_kernel() {
     install_kernelsu
     
     log_step "Step 3/4: Configuring defconfig... ⚙️"
-    rm -f "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.old"
     
     # 🔧 Handle multiple defconfig fragments
     IFS=' ' read -r -a defconfig_array <<< "$DEVICE_DEFCONFIG"
@@ -326,7 +340,7 @@ compile_kernel() {
     fragments=("${defconfig_array[@]:1}")
     
     echo -e "${CYAN}⚙️  Configuring primary defconfig: $primary_defconfig${NC}"
-    if ! make $BUILD_OPTIONS ARCH=arm64 "$primary_defconfig" O="$KERNEL_OUTDIR" 2>&1 | tee -a "$BUILD_LOG"; then
+    if ! make $BUILD_OPTIONS ARCH=arm64 "$primary_defconfig" O="$KERNEL_OUTDIR" 2>&1; then
         log_error "Primary defconfig configuration failed! 💥"
         return 1
     fi
@@ -338,7 +352,7 @@ compile_kernel() {
             frag_path="arch/arm64/configs/$frag"
             if [[ -f "$KERNEL_ROOTDIR/$frag_path" ]]; then
                 echo -e "${CYAN}Merging $frag...${NC}"
-                if ! scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$KERNEL_OUTDIR/.config" "$KERNEL_ROOTDIR/$frag_path" 2>&1 | tee -a "$BUILD_LOG"; then
+                if ! scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$KERNEL_OUTDIR/.config" "$KERNEL_ROOTDIR/$frag_path" 2>&1; then
                     log_error "Failed to merge $frag"
                     return 1
                 fi
@@ -348,7 +362,7 @@ compile_kernel() {
         done
         # Perbarui konfigurasi setelah merge
         log_info "Updating defconfig after merge..."
-        if ! make $BUILD_OPTIONS ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" 2>&1 | tee -a "$BUILD_LOG"; then
+        if ! make $BUILD_OPTIONS ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" 2>&1; then
             log_error "Failed to update defconfig after merge"
             return 1
         fi
@@ -360,7 +374,7 @@ compile_kernel() {
     if [[ "$CCACHE" == "true" ]]; then
         export CC="clang"
         log_info "CCache statistics before build: 📊"
-        ccache -s | tee -a "$BUILD_LOG"
+        ccache -s
     else
         export CC="clang"
     fi
@@ -377,73 +391,34 @@ compile_kernel() {
     # 📊 Progress indicator
     echo -e "${BOLD_CYAN}⏳ Starting compilation with ${NUM_CORES} cores...${NC}"
     
-    # Execute build dengan tee untuk logging real-time
-    local build_cmd="make $BUILD_OPTIONS ARCH=arm64 O=$KERNEL_OUTDIR ${build_targets[*]}"
-    log_info "Build command: ${build_cmd:0:80}..."
-    
-    # Spinner animation function
-    spinner() {
-        local pid=$1
-        local delay=0.1
-        local spinstr='|/-\'
-        while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
-            local temp=${spinstr#?}
-            printf " [%c]  " "$spinstr"
-            local spinstr=$temp${spinstr%"$temp"}
-            sleep $delay
-            printf "\b\b\b\b\b\b"
-        done
-        printf "    \b\b\b\b"
-    }
-    
-    # Start build with spinner in background
-    (
-        make $BUILD_OPTIONS \
-            ARCH=arm64 \
-            O="$KERNEL_OUTDIR" \
-            LLVM=1 \
-            LLVM_IAS=1 \
-            CC="$CC" \
-            AS="llvm-as" \
-            AR="llvm-ar" \
-            NM="llvm-nm" \
-            STRIP="llvm-strip" \
-            OBJCOPY="llvm-objcopy" \
-            OBJDUMP="llvm-objdump" \
-            OBJSIZE="llvm-size" \
-            READELF="llvm-readelf" \
-            HOSTCC="clang" \
-            HOSTCXX="clang++" \
-            HOSTAR="llvm-ar" \
-            HOSTLD="ld.lld" \
-            CROSS_COMPILE="aarch64-linux-gnu-" \
-            CROSS_COMPILE_ARM32="arm-linux-gnueabi-" \
-            CLANG_TRIPLE="aarch64-linux-gnu-" \
-            "${build_targets[@]}" 2>&1 | tee -a "$BUILD_LOG"
-    ) &
-    
-    local build_pid=$!
-    
-    # Show spinner while building
-    echo -ne "${CYAN}🔄 Building kernel... ${NC}"
-    spinner $build_pid &
-    local spinner_pid=$!
-    
-    # Wait for build to complete
-    wait $build_pid
-    local build_exit=$?
-    
-    # Kill spinner
-    kill $spinner_pid 2>/dev/null
-    wait $spinner_pid 2>/dev/null
-    echo -e "\r${GREEN}✅ Build completed!${NC}      "
-    
-    if [[ $build_exit -eq 0 ]]; then
-        log_success "Kernel compilation completed! 🎉"
-    else
+    # Execute build tanpa spinner agar log lebih jelas
+    if ! make $BUILD_OPTIONS \
+        ARCH=arm64 \
+        O="$KERNEL_OUTDIR" \
+        LLVM=1 \
+        LLVM_IAS=1 \
+        CC="$CC" \
+        AS="llvm-as" \
+        AR="llvm-ar" \
+        NM="llvm-nm" \
+        STRIP="llvm-strip" \
+        OBJCOPY="llvm-objcopy" \
+        OBJDUMP="llvm-objdump" \
+        OBJSIZE="llvm-size" \
+        READELF="llvm-readelf" \
+        HOSTCC="clang" \
+        HOSTCXX="clang++" \
+        HOSTAR="llvm-ar" \
+        HOSTLD="ld.lld" \
+        CROSS_COMPILE="aarch64-linux-gnu-" \
+        CROSS_COMPILE_ARM32="arm-linux-gnueabi-" \
+        CLANG_TRIPLE="aarch64-linux-gnu-" \
+        "${build_targets[@]}"; then
         log_error "Kernel compilation failed - check $BUILD_LOG for details 💥"
         return 1
     fi
+    
+    log_success "Kernel compilation completed! 🎉"
     
     # ✅ Verify output
     if [[ ! -f "$IMAGE" ]]; then
@@ -456,7 +431,7 @@ compile_kernel() {
     # 📊 Show CCache statistics if enabled
     if [[ "$CCACHE" == "true" ]]; then
         log_info "CCache statistics after build: 📊"
-        ccache -s | tee -a "$BUILD_LOG"
+        ccache -s
     fi
 }
 
@@ -468,8 +443,8 @@ patch_kpm() {
         local download_url="https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/$KPM_VERSION/patch_linux"
         log_info "Downloading KPM patcher from $download_url 📥"
 
-        # PERBAIKAN: gunakan curl dengan progress bar
-        if ! curl -L --progress-bar -o patch_linux "$download_url" 2>&1 | tee -a "$BUILD_LOG"; then
+        # Unduh dengan curl, pastikan berhasil
+        if ! curl -L --progress-bar --fail -o patch_linux "$download_url"; then
             log_error "Failed to download KPM patcher version $KPM_VERSION ❌"
             return 1
         fi
@@ -477,7 +452,7 @@ patch_kpm() {
         chmod +x patch_linux
         log_info "Applying KPM patch to $TYPE_IMAGE... 🔧"
         
-        if ./patch_linux "$TYPE_IMAGE" 2>&1 | tee -a "$BUILD_LOG"; then
+        if ./patch_linux "$TYPE_IMAGE" 2>&1; then
             if [[ -f "oImage" ]]; then
                 rm -f "$TYPE_IMAGE"
                 mv oImage "$TYPE_IMAGE"
@@ -501,7 +476,7 @@ prepare_anykernel() {
     [[ -d "$ANYKERNEL_DIR" ]] && rm -rf "$ANYKERNEL_DIR"
     
     echo -e "${CYAN}📥 Cloning AnyKernel repository...${NC}"
-    if git clone --depth=1 -b "$ANYKERNEL_BRANCH" "$ANYKERNEL" "$ANYKERNEL_DIR" 2>&1 | tee -a "$BUILD_LOG"; then
+    if git clone --depth=1 -b "$ANYKERNEL_BRANCH" "$ANYKERNEL" "$ANYKERNEL_DIR" 2>&1; then
         cd "$ANYKERNEL_DIR"
         
         # 📋 Copy kernel image(s)
@@ -509,15 +484,15 @@ prepare_anykernel() {
         echo -e "${CYAN}📋 Copying kernel files...${NC}"
         
         if [[ "$BUILD_DTBO" == "true" ]]; then
-            cp -f "$IMAGE" "$DTBO" . 2>&1 | tee -a "$BUILD_LOG" || copy_success=false
+            cp -f "$IMAGE" "$DTBO" . 2>&1 || copy_success=false
             echo -e "${GREEN}✅ Kernel image and DTBO copied${NC}"
         else
-            cp -f "$IMAGE" . 2>&1 | tee -a "$BUILD_LOG" || copy_success=false
+            cp -f "$IMAGE" . 2>&1 || copy_success=false
             echo -e "${GREEN}✅ Kernel image copied${NC}"
         fi
         
         if [[ "$INCLUDE_DTB" == "true" ]]; then
-            cp -f "$DTB" dtb 2>&1 | tee -a "$BUILD_LOG" || copy_success=false
+            cp -f "$DTB" dtb 2>&1 || copy_success=false
             echo -e "${GREEN}✅ DTB copied${NC}"
         fi
         
@@ -569,7 +544,7 @@ create_and_push_zip() {
     log_step "Creating flashable ZIP: $zip_name 📦"
     
     echo -e "${CYAN}🗜️  Compressing files...${NC}"
-    if zip -r9 "$zip_name" . -x "*.git*" "README.md" ".github/*" 2>&1 | tee -a "$BUILD_LOG"; then
+    if zip -r9 "$zip_name" . -x "*.git*" "README.md" ".github/*" 2>&1; then
         log_success "ZIP creation completed! ✅"
     else
         log_error "ZIP creation failed ❌"
@@ -591,32 +566,16 @@ create_and_push_zip() {
     
     log_step "Uploading build to Telegram... 📤"
     
-    # PERBAIKAN: caption tanpa <blockquote>
+    # 📝 Caption singkat agar tidak melebihi batas (1024 karakter)
     local caption="
-✨ <b>🚀 Build Finished Successfully!</b> ✨
-
-📦 <b>Kernel:</b> <code>$KERNEL_NAME</code>
+✨ <b>Build Finished!</b> ✨
 📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>
-👤 <b>Builder:</b> <code>$BUILD_USER@$BUILD_HOST</code>
-
-<b>🔧 Build Info:</b>
-Linux version: <code>${KERNEL_VERSION:-N/A}</code>
-Branch: <code>${BRANCH:-N/A}</code>
-Commit: <code>${LATEST_COMMIT:-N/A}</code>
-Author: <code>${COMMIT_BY:-N/A}</code>
-Uts: <code>${UTS_VERSION:-N/A}</code>
-Compiler: <code>${KBUILD_COMPILER_STRING:-N/A}</code>
-
-<b>📊 File Info:</b>
-Size: $zip_size
-SHA256: <code>${zip_sha256:0:16}...</code>
-MD5: <code>$zip_md5</code>
-SHA1: <code>${zip_sha1:0:16}...</code>
-
-⏱️ <b>Build Time:</b> ${minutes}m ${seconds}s
-📝 <b>Changes:</b> <a href=\"https://github.com/$KERNEL_SOURCE/commits/$KERNEL_BRANCH\">View on GitHub</a>
-    
-🎉 <b>Ready to flash!</b> 🎉"
+👤 <b>Builder:</b> <code>$BUILD_USER</code>
+📦 <b>Kernel:</b> <code>$KERNEL_NAME</code>
+📏 <b>Size:</b> $zip_size
+⏱️ <b>Time:</b> ${minutes}m ${seconds}s
+🔗 <b>Commit:</b> <a href=\"https://github.com/$KERNEL_SOURCE/commit/$COMMIT_HASH\">$COMMIT_HASH</a>
+✅ <b>Ready to flash!</b>"
     
     local doc_name="$(basename "$zip_name")"
 
@@ -625,7 +584,7 @@ SHA1: <code>${zip_sha1:0:16}...</code>
         -F chat_id="$TG_CHAT_ID" \
         -F "disable_web_page_preview=true" \
         -F "parse_mode=html" \
-        -F caption="$caption" 2>&1 | tee -a "$BUILD_LOG"; then
+        -F caption="$caption" 2>&1; then
         echo -e "\n${BOLD_GREEN}✨══════════════════════════════════════════════════════════════════✨${NC}"
         log_success "Build uploaded successfully! 🎊"
         log_info "📁 File: $zip_name"
@@ -653,7 +612,7 @@ main() {
     log_step "Starting optimized kernel build process... 🚀"
     START_TIME=$(date +%s)
     
-    # 📝 Initialize build log
+    # 📝 Initialize build log (sebenarnya sudah di-redirect, tapi kita buat file)
     > "$BUILD_LOG"
     
     # 🔧 Setup and validation
