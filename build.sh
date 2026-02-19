@@ -599,6 +599,38 @@ create_and_push_zip() {
     fi
 }
 
+send_config() {
+    log_step "Sending kernel config to Telegram... 📄"
+    
+    local config_file="$KERNEL_OUTDIR/.config"
+    if [[ ! -f "$config_file" ]]; then
+        log_warning "Config file not found at $config_file, skipping send"
+        return 1
+    fi
+    
+    local config_size=$(du -h "$config_file" | cut -f1)
+    local config_name="config-${DEVICE_CODENAME}-${DATE}.txt"
+    
+    # Buat caption singkat
+    local caption="⚙️ <b>Kernel Config for $DEVICE_CODENAME</b>
+📅 Date: $(date +'%Y-%m-%d %H:%M:%S')
+📏 Size: $config_size
+🔧 Compiler: $KBUILD_COMPILER_STRING
+🌿 Branch: ${BRANCH:-N/A}
+📝 Commit: ${LATEST_COMMIT:-N/A}"
+    
+    echo -e "${CYAN}📤 Uploading config file ($config_size)...${NC}"
+    if curl -F document=@"$config_file" -F filename="$config_name" "$BOT_DOC_URL" \
+        -F chat_id="$TG_CHAT_ID" \
+        -F "disable_web_page_preview=true" \
+        -F "parse_mode=html" \
+        -F caption="$caption" > /dev/null 2>&1; then
+        log_success "Config file sent successfully! 📨"
+    else
+        log_warning "Failed to send config file 📭"
+    fi
+}
+
 ## 🚀 Main Execution Flow
 #---------------------------------------------------------------------------------
 
@@ -626,6 +658,7 @@ main() {
     prepare_anykernel || return 1
     get_build_info
     create_and_push_zip || return 1
+    send_config
     
     echo -e "\n${BOLD_GREEN}🎉══════════════════════════════════════════════════════════════════🎉${NC}"
     log_success "All tasks completed successfully! 🌟"
