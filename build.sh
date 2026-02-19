@@ -298,22 +298,12 @@ install_kernelsu() {
     esac
 
     if [[ -n "$url" ]]; then
-        log_info "Downloading $KERNELSU_TYPE setup script from $url 🔗"
-        # Unduh script ke file sementara untuk verifikasi (jika ada) dan eksekusi
-        local temp_script="$CIRRUS_WORKING_DIR/kernelsu_setup.sh"
-        if curl -fsSL --proto '=https' --tlsv1.2 --fail -o "$temp_script" "$url"; then
-            chmod +x "$temp_script"
-            # Opsional: verifikasi checksum jika tersedia
-            log_info "Executing $KERNELSU_TYPE setup script..."
-            if timeout 300 bash -c "$temp_script" -s "$KERNELSU_BRANCH"; then
-                log_success "KernelSU installation completed! ✅"
-            else
-                log_warning "$KERNELSU_TYPE installation failed, continuing build without KernelSU ⚠️"
-                return 1
-            fi
-            rm -f "$temp_script"
+        log_info "Executing $KERNELSU_TYPE setup script from $url 🔗"
+        # Use timeout to prevent hanging
+        if timeout 300 bash -c "curl -LSs '$url' | bash -s '$KERNELSU_BRANCH'"; then
+            log_success "KernelSU installation completed! ✅"
         else
-            log_warning "Failed to download $KERNELSU_TYPE setup script, continuing without KernelSU ⚠️"
+            log_warning "$KERNELSU_TYPE installation failed, continuing build without KernelSU ⚠️"
             return 1
         fi
     fi
@@ -322,10 +312,9 @@ install_kernelsu() {
 compile_kernel() {
     cd "$KERNEL_ROOTDIR"
     
-    # 🧹 Bersihkan hanya direktori out (lebih aman daripada git clean -fdx)
-    log_step "Step 1/4: Cleaning output directory... 🧹"
-    rm -rf "$KERNEL_OUTDIR"
-    mkdir -p "$KERNEL_OUTDIR"
+    # 🧹 Clean working directory
+    log_step "Step 1/4: Cleaning working directory... 🧹"
+    git clean -fdx
     
     tg_post_msg "🚀 <b>Kernel Build Started!</b>%0A%0A📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>%0A⚙️ <b>Defconfig:</b> <code>$DEVICE_DEFCONFIG</code>%0A🔧 <b>Toolchain:</b> <code>$KBUILD_COMPILER_STRING</code>%0A⏰ <b>Start Time:</b> $(date +'%H:%M:%S')"
     
@@ -333,6 +322,7 @@ compile_kernel() {
     install_kernelsu
     
     log_step "Step 3/4: Configuring defconfig... ⚙️"
+    rm -f "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.old"
     
     # 🔧 Handle multiple defconfig fragments
     IFS=' ' read -r -a defconfig_array <<< "$DEVICE_DEFCONFIG"
@@ -612,26 +602,6 @@ $changelog
 $commit_link | <a href=\"https://t.me/mrtproject\">Channel</a>
 
 🎉 <b>Ready to flash!</b>"
-    
-    # Cek panjang caption (dalam byte, kira-kira karakter)
-    local caption_len=${#caption}
-    if [[ $caption_len -gt 1024 ]]; then
-        log_warning "Caption terlalu panjang ($caption_len chars), memotong..."
-        # Potong dengan menghapus changelog terlebih dahulu
-        caption="${caption//$changelog/}"  # hapus changelog
-        caption_len=${#caption}
-        if [[ $caption_len -gt 1024 ]]; then
-            # Potong lebih agresif: hapus sebagian info
-            caption="✨ <b>Build Success</b> ✨
-📱 $DEVICE_CODENAME
-📦 $KERNEL_NAME
-🌿 ${BRANCH:-N/A} @ ${COMMIT_HASH:-N/A}
-⏱️ $build_time_str
-📏 $zip_size
-$commit_link"
-        fi
-    fi
-    
     echo "$caption"
 }
 
