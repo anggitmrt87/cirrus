@@ -536,6 +536,105 @@ get_build_info() {
     export COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "N/A")
 }
 
+generate_caption() {
+    local zip_name="$1"
+    local zip_size="$2"
+    local zip_sha256="$3"
+    local zip_md5="$4"
+    local zip_sha1="$5"
+    
+    # Format build time
+    local end_time=$(date +%s)
+    local build_time=$((end_time - START_TIME))
+    local minutes=$((build_time / 60))
+    local seconds=$((build_time % 60))
+    local build_time_str="${minutes}m ${seconds}s"
+    
+    # Format tanggal
+    local build_date=$(date +"%Y-%m-%d %H:%M:%S")
+    
+    # Ambil beberapa commit terakhir untuk changelog (max 3)
+    local changelog=""
+    if cd "$KERNEL_ROOTDIR" 2>/dev/null; then
+        # Ambil 3 commit terakhir dalam format "• hash - subject (author)"
+        changelog=$(git log --pretty=format:"• %h - %s (%an)" -3 2>/dev/null | head -c 300)
+        if [[ -n "$changelog" ]]; then
+            changelog="📝 <b>Recent commits:</b>\n$changelog"
+        fi
+    fi
+    
+    # Status KernelSU
+    local kernelsu_status="❌ Disabled"
+    if [[ "$KERNELSU" == "true" && -n "$KERNELSU_TYPE" ]]; then
+        kernelsu_status="✅ ${KERNELSU_TYPE} (${KERNELSU_BRANCH:-hookless})"
+    fi
+    
+    # Status KPM
+    local kpm_status="❌ Disabled"
+    if [[ "$KPM_PATCH" == "true" && "$KERNELSU" == "true" ]]; then
+        kpm_status="✅ v${KPM_VERSION}"
+    fi
+    
+    # Link ke commit di GitHub
+    local commit_link=""
+    if [[ -n "$KERNEL_SOURCE" && -n "$COMMIT_HASH" ]]; then
+        commit_link="🔗 <a href=\"https://github.com/$KERNEL_SOURCE/commit/$COMMIT_HASH\">View Commit</a>"
+    fi
+    
+    # Informasi tambahan: Kernel version
+    local kernel_ver="${KERNEL_VERSION:-N/A}"
+    
+    # Gabungkan semua info
+    local caption="✨ <b>🚀 KERNEL BUILD SUCCESSFULLY!</b> ✨
+
+📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>
+📦 <b>Kernel:</b> <code>$KERNEL_NAME</code>
+🌿 <b>Branch:</b> <code>${BRANCH:-N/A}</code>
+🔖 <b>Commit:</b> <code>${COMMIT_HASH:-N/A}</code> - ${LATEST_COMMIT:-N/A}
+👤 <b>Author:</b> ${COMMIT_BY:-N/A}
+⚙️ <b>Defconfig:</b> <code>$DEVICE_DEFCONFIG</code>
+🛠️ <b>Compiler:</b> <code>${KBUILD_COMPILER_STRING:-N/A}</code>
+📅 <b>Build Date:</b> $build_date
+⏱️ <b>Build Time:</b> $build_time_str
+🔧 <b>Kernel Version:</b> <code>$kernel_ver</code>
+
+📊 <b>File Info:</b>
+📏 Size: $zip_size
+🔐 MD5: <code>${zip_md5:0:16}...</code>
+🔑 SHA1: <code>${zip_sha1:0:16}...</code>
+🔒 SHA256: <code>${zip_sha256:0:16}...</code>
+
+🔧 <b>KernelSU:</b> $kernelsu_status
+📦 <b>KPM Patch:</b> $kpm_status
+
+$changelog
+
+$commit_link | <a href=\"https://t.me/mrtproject\">Channel</a>
+
+🎉 <b>Ready to flash!</b>"
+    
+    # Cek panjang caption (dalam byte, kira-kira karakter)
+    local caption_len=${#caption}
+    if [[ $caption_len -gt 1024 ]]; then
+        log_warning "Caption terlalu panjang ($caption_len chars), memotong..."
+        # Potong dengan menghapus changelog terlebih dahulu
+        caption="${caption//$changelog/}"  # hapus changelog
+        caption_len=${#caption}
+        if [[ $caption_len -gt 1024 ]]; then
+            # Potong lebih agresif: hapus sebagian info
+            caption="✨ <b>Build Success</b> ✨
+📱 $DEVICE_CODENAME
+📦 $KERNEL_NAME
+🌿 ${BRANCH:-N/A} @ ${COMMIT_HASH:-N/A}
+⏱️ $build_time_str
+📏 $zip_size
+$commit_link"
+        fi
+    fi
+    
+    echo "$caption"
+}
+
 create_and_push_zip() {
     cd "$ANYKERNEL_DIR"
     
@@ -558,24 +657,10 @@ create_and_push_zip() {
     local zip_sha256=$(sha256sum "$zip_name" | cut -d' ' -f1)
     local zip_size=$(du -h "$zip_name" | cut -f1)
     
-    # ⏱️ Calculate build time
-    local end_time=$(date +%s)
-    local build_time=$((end_time - START_TIME))
-    local minutes=$((build_time / 60))
-    local seconds=$((build_time % 60))
-    
     log_step "Uploading build to Telegram... 📤"
     
-    # 📝 Caption singkat agar tidak melebihi batas (1024 karakter)
-    local caption="
-✨ <b>Build Finished!</b> ✨
-📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>
-👤 <b>Builder:</b> <code>$BUILD_USER</code>
-📦 <b>Kernel:</b> <code>$KERNEL_NAME</code>
-📏 <b>Size:</b> $zip_size
-⏱️ <b>Time:</b> ${minutes}m ${seconds}s
-🔗 <b>Commit:</b> <a href=\"https://github.com/$KERNEL_SOURCE/commit/$COMMIT_HASH\">$COMMIT_HASH</a>
-✅ <b>Ready to flash!</b>"
+    # Generate caption kaya
+    local caption=$(generate_caption "$zip_name" "$zip_size" "$zip_sha256" "$zip_md5" "$zip_sha1")
     
     local doc_name="$(basename "$zip_name")"
 
@@ -589,6 +674,11 @@ create_and_push_zip() {
         log_success "Build uploaded successfully! 🎊"
         log_info "📁 File: $zip_name"
         log_info "📏 Size: $zip_size"
+        # build time dihitung di dalam generate_caption, tapi kita bisa hitung ulang atau pakai variabel
+        local end_time=$(date +%s)
+        local build_time=$((end_time - START_TIME))
+        local minutes=$((build_time / 60))
+        local seconds=$((build_time % 60))
         log_info "⏱️  Build time: ${minutes}m ${seconds}s"
         echo -e "${BOLD_GREEN}✨══════════════════════════════════════════════════════════════════✨${NC}"
         
