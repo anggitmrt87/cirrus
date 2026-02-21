@@ -24,9 +24,9 @@ env:
 
   # 🔧 Kernel Build Configuration
   TYPE_IMAGE: "Image.gz"
-  BUILD_DTBO: "false"
+  BUILD_DTBO: "true"
   DISABLE_LOCALVERSION_ST: "true"
-  INCLUDE_DTB: "false"
+  INCLUDE_DTB: "true"
   DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
   # ⚡ Kernel SU configuration
