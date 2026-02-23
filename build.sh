@@ -549,7 +549,7 @@ generate_caption() {
         # Ambil 3 commit terakhir dalam format "• hash - subject (author)"
         changelog=$(git log --pretty=format:"• %h - %s (%an)" -3 2>/dev/null | head -c 300)
         if [[ -n "$changelog" ]]; then
-            changelog="📝 <b>Recent commits:</b>\n$changelog"
+            changelog="📝 <b>Recent commits:</b> $changelog"
         fi
     fi
     
