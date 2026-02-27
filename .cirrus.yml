@@ -8,7 +8,7 @@ env:
   BUILD_USER: "builder"
   BUILD_HOST: "mrtproject™"
   KERNEL_SOURCE: "https://github.com/anggitmrt87/kernel_xiaomi_citrus_sm6115"
-  KERNEL_BRANCH: "13.0.0-perf"
+  KERNEL_BRANCH: "new"
   DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/kernelsu.config"
   ANYKERNEL: "https://github.com/frstprjkt/AnyKernel3"
   ANYKERNEL_BRANCH: "lime"
