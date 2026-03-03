@@ -62,7 +62,7 @@ task:
   update_script:
     - echo "🔄 Updating System Packages..."
     - apt-get update -qq
-    - apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo5
+    - apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo6
     - echo "🌍 Setting up locale..."
     - echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && /usr/sbin/locale-gen
     - echo "🕐 Setting timezone to $TZ..."
