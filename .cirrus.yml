@@ -38,10 +38,10 @@ env:
 
   # 🚀 Build Optimization
   BUILD_OPTIONS: "-j8"
-  CCACHE: "false"               # Ubah ke "true" jika ingin menggunakan ccache
+  CCACHE: "true"               # Ubah ke "true" jika ingin menggunakan ccache
   CCACHE_DIR: "/tmp/ccache"
   CCACHE_MAXSIZE: "10G"
-  CCACHE_COMPRESS: "true"
+  CCACHE_COMPRESS: "false"
   
   # 📊 Enhanced Logging and Debugging
   DEBUG_MODE: "false"
@@ -69,13 +69,6 @@ task:
     - ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
     - apt-get clean
     - echo "✅ System setup completed!"
-
-  setup_script:
-    - echo "📁 Creating directories..."
-    - mkdir -p /tmp/ccache
-    - ccache -M $CCACHE_MAXSIZE
-    - ccache -z
-    - echo "🔧 CCache configured (max: $CCACHE_MAXSIZE)"
 
   sync_script:
     - echo "📥 Starting source download..."

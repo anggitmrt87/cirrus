@@ -119,8 +119,6 @@ setup_env() {
     
     # 💾 CCache configuration
     if [[ "$CCACHE" == "true" ]]; then
-        mkdir -p "$CCACHE_DIR"
-        export CCACHE_DIR="${CCACHE_DIR:-/tmp/ccache}"
         export USE_CCACHE=1
         export CCACHE_EXEC=$(which ccache)
         export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
@@ -362,7 +360,7 @@ compile_kernel() {
     
     # 💾 CCache configuration
     if [[ "$CCACHE" == "true" ]]; then
-        export CC="clang"
+        export CC="ccache clang"
         log_info "CCache statistics before build: 📊"
         ccache -s
     else
