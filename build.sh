@@ -289,9 +289,9 @@ install_kernelsu() {
             log_info "Installing KERNELSU BACKSLASHXX... 🛡️"
             url="https://raw.githubusercontent.com/backslashxx/KernelSU/refs/heads/master/kernel/setup.sh"
             ;;
-        "mambosu")
-            log_info "Installing MamboSU... 🛡️"
-            url="https://raw.githubusercontent.com/Sorayukii/KernelSU-Next/stable/kernel/setup.sh"
+        "all")
+            log_info "Installing hookless... 🛡️"
+            url="https://raw.githubusercontent.com/anggitmrt87/KernelSU-Next/stable/kernel/setup.sh"
             ;;
         *)
             log_warning "Invalid KERNELSU_TYPE: '$KERNELSU_TYPE'. Continuing build without KernelSU. ⚠️"
