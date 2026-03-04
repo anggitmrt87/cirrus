@@ -41,7 +41,6 @@ env:
   CCACHE: "true"               # Ubah ke "true" jika ingin menggunakan ccache
   CCACHE_DIR: "/tmp/ccache"
   CCACHE_MAXSIZE: "10G"
-  CCACHE_COMPRESS: "false"
   
   # 📊 Enhanced Logging and Debugging
   DEBUG_MODE: "false"

@@ -123,14 +123,8 @@ setup_env() {
         export CCACHE_EXEC=$(which ccache)
         export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
         export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:$PATH"
-        if [[ "${CCACHE_COMPRESS}" == "true" ]]; then
-            ccache -o compression=true
-            ccache -o compression_level=1
-            log_info "CCache compression enabled"
-        elif [[ "${CCACHE_COMPRESS}" == "false" ]]; then
-            ccache -o compression=false
-            log_info "CCache compression disabled"
-        fi
+        ccache -o compression=true
+        ccache -o compression_level=1
         ccache -o max_size=${CCACHE_MAXSIZE}
         ccache -z
         log_info "CCache enabled: $CCACHE_DIR (max: $CCACHE_MAXSIZE) 💿"
