@@ -285,7 +285,7 @@ install_kernelsu() {
             ;;
         "all")
             log_info "Installing hookless... 🛡️"
-            url="https://raw.githubusercontent.com/anggitmrt87/KernelSU-Next/stable/kernel/setup.sh"
+            url="https://raw.githubusercontent.com/Sorayukii/KernelSU-Next/stable/kernel/setup.sh"
             ;;
         *)
             log_warning "Invalid KERNELSU_TYPE: '$KERNELSU_TYPE'. Continuing build without KernelSU. ⚠️"
