@@ -31,8 +31,8 @@ env:
 
   # ⚡ Kernel SU configuration
   KERNELSU: "true"
-  KERNELSU_TYPE: "rksu"
-  KERNELSU_BRANCH: "main"
+  KERNELSU_TYPE: "all"
+  KERNELSU_BRANCH: "hookless"
   KPM_PATCH: "false"
   KPM_VERSION: "0.13.0"
 
