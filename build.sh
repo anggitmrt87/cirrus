@@ -595,7 +595,7 @@ generate_caption() {
 
 $changelog
 
-$commit_link | <a href=\"https://t.me/mrtproject\">Channel</a>
+$commit_link | <a href=\"https://t.me/HyperOS_chime\">Channel</a>
 
 🎉 <b>Ready to flash!</b>"
     echo "$caption"
