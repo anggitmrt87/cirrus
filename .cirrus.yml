@@ -31,9 +31,9 @@ env:
 
   # ⚡ Kernel SU configuration
   KERNELSU: "true"
-  KERNELSU_TYPE: "all"
-  KERNELSU_BRANCH: "hookless"
-  KPM_PATCH: "false"
+  KERNELSU_TYPE: "sukisu"
+  KERNELSU_BRANCH: "main"
+  KPM_PATCH: "true"
   KPM_VERSION: "0.13.0"
 
   # 🚀 Build Optimization
