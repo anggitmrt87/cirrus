@@ -33,7 +33,7 @@ env:
   KERNELSU: "true"
   KERNELSU_TYPE: "sukisu"
   KERNELSU_BRANCH: "main"
-  KPM_PATCH: "true"
+  KPM_PATCH: "false"
   KPM_VERSION: "0.13.0"
 
   # 🚀 Build Optimization
