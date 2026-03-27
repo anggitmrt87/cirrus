@@ -2,7 +2,6 @@
 
 set -e
 
-# 🎨 Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -17,38 +16,31 @@ echo "║            📥 SOURCE & TOOLCHAIN DOWNLOADER                     ║"
 echo "╚══════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# ⚡ Function for error handling
 handle_error() {
     echo -e "${RED}❌ [ERROR] $1${NC}"
     exit 1
 }
 
-# ⚠️ Function for warning
 log_warning() {
     echo -e "${YELLOW}⚠️ [WARNING] $1${NC}"
 }
 
-# ✅ Function for success
 log_success() {
     echo -e "${GREEN}✅ [SUCCESS] $1${NC}"
 }
 
-# 🔧 Function for info
 log_info() {
     echo -e "${BLUE}🔧 [INFO] $1${NC}"
 }
 
-# 📥 Ensure CLANG_ROOTDIR is set
-export CLANG_ROOTDIR="${CLANG_ROOTDIR:-$CIRRUS_WORKING_DIR/clang}" 
+export CLANG_ROOTDIR="${CLANG_ROOTDIR:-$CIRRUS_WORKING_DIR/clang}"
 export TEMP_DIR="$CIRRUS_WORKING_DIR/tmp_downloads"
 mkdir -p "$TEMP_DIR"
 
-# 🔍 Cek keberadaan aria2c
 if ! command -v aria2c &> /dev/null; then
     handle_error "aria2c tidak ditemukan. Pastikan sudah diinstall (apt-get install aria2)"
 fi
 
-# 📥 Function for downloading with retry and progress
 download_with_retry() {
     local url="$1"
     local dest_file="$2"
@@ -72,7 +64,6 @@ download_with_retry() {
     handle_error "Failed to download after $retries attempts: $url"
 }
 
-# 🔍 Function to verify download
 verify_download() {
     local file="$1"
     if [[ ! -f "$file" || ! -s "$file" ]]; then
@@ -88,7 +79,6 @@ if git clone --depth=1 --recurse-submodules --shallow-submodules \
     "$CIRRUS_WORKING_DIR/$DEVICE_CODENAME" 2>&1; then
     log_success "Kernel sources cloned successfully! 🎉"
     
-    # 🔍 Verify clone
     cd "$CIRRUS_WORKING_DIR/$DEVICE_CODENAME"
     if [[ -d ".git" ]]; then
         echo -e "${GREEN}✅ Git repository verified${NC}"
@@ -104,26 +94,74 @@ echo -e "${MAGENTA}🔧 Step 2: Setting up Toolchain ($USE_CLANG)...${NC}"
 mkdir -p "$CLANG_ROOTDIR"
 
 local_archive_name=""
-strip_components_count=0
+smart_extract() {
+    local archive="$1"
+    local target="$2"
+    local temp_extract="$TEMP_DIR/extract"
+    mkdir -p "$temp_extract"
+    
+    echo -e "${CYAN}📦 Extracting archive to temporary location...${NC}"
+    if ! tar -xf "$archive" -C "$temp_extract"; then
+        handle_error "Failed to extract archive"
+    fi
+    
+    local clang_path
+    clang_path=$(find "$temp_extract" -type f -name "clang" -executable | head -1)
+    if [[ -z "$clang_path" ]]; then
+        clang_path=$(find "$temp_extract" -type f -name "clang" | head -1)
+        if [[ -z "$clang_path" ]]; then
+            handle_error "clang binary not found in extracted archive"
+        fi
+    fi
+    
+    log_info "Found clang at: $clang_path"
+    
+    local bin_dir
+    bin_dir=$(dirname "$clang_path")
+    if [[ "$(basename "$bin_dir")" != "bin" ]]; then
+        log_warning "clang is not in a 'bin' directory. Using its parent as bin."
+        mkdir -p "$target/bin"
+        cp -L "$clang_path" "$target/bin/"
+        local lld_path
+        lld_path=$(find "$temp_extract" -type f -name "ld.lld" | head -1)
+        if [[ -n "$lld_path" ]]; then
+            cp -L "$lld_path" "$target/bin/"
+        else
+            log_warning "ld.lld not found, will use system linker?"
+        fi
+    else
+        local parent_dir
+        parent_dir=$(dirname "$bin_dir")
+        rm -rf "$target/bin" 2>/dev/null || true
+        mv "$bin_dir" "$target/bin"
+        for dir in lib lib64 include share; do
+            if [[ -d "$parent_dir/$dir" ]]; then
+                mv "$parent_dir/$dir" "$target/" 2>/dev/null || true
+            fi
+        done
+    fi
+    
+    chmod -R +x "$target/bin" 2>/dev/null || true
+    
+    rm -rf "$temp_extract"
+    log_success "Toolchain extracted and organized successfully!"
+}
 
-# 🛠️ Toolchain selection with validation
 case "$USE_CLANG" in
     "aosp")
         local_archive_name="aosp-clang.tar.gz"
         log_info "Using AOSP Clang toolchain ⚙️"
-        # Validasi URL (opsional)
         if ! curl --head --silent --fail "$AOSP_CLANG_URL" > /dev/null; then
             handle_error "AOSP Clang URL tidak dapat diakses: $AOSP_CLANG_URL"
         fi
         download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        strip_components_count=1
+        smart_extract "$TEMP_DIR/$local_archive_name" "$CLANG_ROOTDIR"
         ;;
     
     "greenforce")
         local_archive_name="greenforce-clang.tar.gz"
         log_info "Using Greenforce Clang toolchain ⚡"
-        # Ambil URL dengan aman
         GREENFORCE_SCRIPT=$(curl -sL --fail https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_latest_url.sh) || handle_error "Gagal mengambil script Greenforce"
         source /dev/stdin <<< "$GREENFORCE_SCRIPT"
         if [[ -z "$LATEST_URL" ]]; then
@@ -131,7 +169,7 @@ case "$USE_CLANG" in
         fi
         download_with_retry "$LATEST_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        strip_components_count=1
+        smart_extract "$TEMP_DIR/$local_archive_name" "$CLANG_ROOTDIR"
         ;;
     
     *)
@@ -139,18 +177,9 @@ case "$USE_CLANG" in
         ;;
 esac
 
-echo -e "${CYAN}📁 Extracting toolchain (strip-components=$strip_components_count)...${NC}"
-if tar -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=$strip_components_count; then
-    log_success "Toolchain extracted successfully! ✅"
-else
-    handle_error "Failed to extract toolchain archive"
-fi
-
-# 🧹 Clean up temporary files
 rm -rf "$TEMP_DIR"
 echo -e "${GREEN}🧹 Temporary files cleaned${NC}"
 
-# 🔍 Verify toolchain installation
 echo ""
 echo -e "${MAGENTA}🔍 Step 3: Verifying toolchain installation...${NC}"
 if [[ -f "$CLANG_ROOTDIR/bin/clang" && -f "$CLANG_ROOTDIR/bin/ld.lld" ]]; then
@@ -159,10 +188,21 @@ if [[ -f "$CLANG_ROOTDIR/bin/clang" && -f "$CLANG_ROOTDIR/bin/ld.lld" ]]; then
     echo -e "${GREEN}✅ Clang: $CLANG_VERSION${NC}"
     echo -e "${GREEN}✅ LLD: $LLD_VERSION${NC}"
     
-    # 🔧 Make binaries executable
     chmod -R +x "$CLANG_ROOTDIR/bin" 2>/dev/null || log_warning "Could not set execute permissions on toolchain binaries"
 else
-    handle_error "Toolchain verification failed: essential binaries not found"
+    clang_found=$(find "$CLANG_ROOTDIR" -type f -name "clang" -executable | head -1)
+    if [[ -n "$clang_found" ]]; then
+        log_warning "clang found at $clang_found but not in expected location"
+        mkdir -p "$CLANG_ROOTDIR/bin"
+        ln -sf "$clang_found" "$CLANG_ROOTDIR/bin/clang"
+        lld_found=$(find "$CLANG_ROOTDIR" -type f -name "ld.lld" -executable | head -1)
+        if [[ -n "$lld_found" ]]; then
+            ln -sf "$lld_found" "$CLANG_ROOTDIR/bin/ld.lld"
+        fi
+        echo -e "${GREEN}✅ Fixed symlinks created${NC}"
+    else
+        handle_error "Toolchain verification failed: essential binaries not found"
+    fi
 fi
 
 echo ""
