@@ -398,8 +398,6 @@ compile_kernel() {
     if ! make $BUILD_OPTIONS \
             ARCH=arm64 \
             O="$KERNEL_OUTDIR" \
-            LLVM=1 \
-            LLVM_IAS=1 \
             CC="$CC" \
             AS="llvm-as" \
             AR="llvm-ar" \
