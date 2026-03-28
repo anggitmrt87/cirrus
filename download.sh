@@ -35,6 +35,8 @@ log_info() {
 }
 
 export CLANG_ROOTDIR="${CLANG_ROOTDIR:-$CIRRUS_WORKING_DIR/clang}"
+export GCC32_ROOTDIR="${GCC32_ROOTDIR:-$CIRRUS_WORKING_DIR/gcc32}"
+export GCC64_ROOTDIR="${GCC64_ROOTDIR:-$CIRRUS_WORKING_DIR/gcc64}"
 export TEMP_DIR="$CIRRUS_WORKING_DIR/tmp_downloads"
 mkdir -p "$TEMP_DIR"
 
@@ -112,6 +114,8 @@ case "$USE_CLANG" in
         else
             handle_error "Failed to extract AOSP toolchain archive"
         fi
+        git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 $GCC64_ROOTDIR
+        git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 $GCC32_ROOTDIR
         ;;
     
     "greenforce")

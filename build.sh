@@ -122,14 +122,22 @@ setup_env() {
         export USE_CCACHE=1
         export CCACHE_EXEC=$(which ccache)
         export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
-        export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:$PATH"
+        if [[ "$USE_CLANG" == "aosp" ]]; then
+            export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:$PATH:$GCC32_ROOTDIR/bin:$PATH:$GCC64_ROOTDIR/bin:$PATH"
+        else
+            export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:$PATH"
+        fi
         ccache -o compression=true
         ccache -o compression_level=1
         ccache -o max_size=${CCACHE_MAXSIZE}
         ccache -z
         log_info "CCache enabled: $CCACHE_DIR (max: $CCACHE_MAXSIZE) 💿"
     else
-        export PATH="$CLANG_ROOTDIR/bin:/usr/bin:$PATH"
+        if [[ "$USE_CLANG" == "aosp" ]]; then
+            export PATH="$CLANG_ROOTDIR/bin:$PATH:$GCC32_ROOTDIR/bin:$PATH:$GCC64_ROOTDIR/bin:$PATH"
+        else
+            export PATH="$CLANG_ROOTDIR/bin:$PATH"
+        fi
     fi
     
     log_success "Environment setup completed! 🎉"
@@ -377,29 +385,38 @@ compile_kernel() {
     # 📊 Progress indicator
     echo -e "${BOLD_CYAN}⏳ Starting compilation with ${NUM_CORES} cores...${NC}"
     
-    # Execute build tanpa spinner agar log lebih jelas
+    if [[ "$USE_CLANG" == "aosp" ]]; then
+        CROSS_COMPILE="aarch64-linux-android-"
+        CROSS_COMPILE_ARM32="arm-linux-androideabi-"
+        CLANG_TRIPLE="aarch64-linux-gnu-"
+    else
+        CROSS_COMPILE="aarch64-linux-gnu-"
+        CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+        CLANG_TRIPLE="aarch64-linux-gnu-"
+    fi
+    
     if ! make $BUILD_OPTIONS \
-        ARCH=arm64 \
-        O="$KERNEL_OUTDIR" \
-        LLVM=1 \
-        LLVM_IAS=1 \
-        CC="$CC" \
-        AS="llvm-as" \
-        AR="llvm-ar" \
-        NM="llvm-nm" \
-        STRIP="llvm-strip" \
-        OBJCOPY="llvm-objcopy" \
-        OBJDUMP="llvm-objdump" \
-        OBJSIZE="llvm-size" \
-        READELF="llvm-readelf" \
-        HOSTCC="clang" \
-        HOSTCXX="clang++" \
-        HOSTAR="llvm-ar" \
-        HOSTLD="ld.lld" \
-        CROSS_COMPILE="aarch64-linux-gnu-" \
-        CROSS_COMPILE_ARM32="arm-linux-gnueabi-" \
-        CLANG_TRIPLE="aarch64-linux-gnu-" \
-        "${build_targets[@]}"; then
+            ARCH=arm64 \
+            O="$KERNEL_OUTDIR" \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CC="$CC" \
+            AS="llvm-as" \
+            AR="llvm-ar" \
+            NM="llvm-nm" \
+            STRIP="llvm-strip" \
+            OBJCOPY="llvm-objcopy" \
+            OBJDUMP="llvm-objdump" \
+            OBJSIZE="llvm-size" \
+            READELF="llvm-readelf" \
+            HOSTCC="clang" \
+            HOSTCXX="clang++" \
+            HOSTAR="llvm-ar" \
+            HOSTLD="ld.lld" \
+            CROSS_COMPILE="$CROSS_COMPILE" \
+            CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" \
+            CLANG_TRIPLE="$CLANG_TRIPLE" \
+            "${build_targets[@]}"; then
         log_error "Kernel compilation failed - check $BUILD_LOG for details 💥"
         return 1
     fi
