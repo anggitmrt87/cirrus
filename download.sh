@@ -73,70 +73,6 @@ verify_download() {
     echo -e "${GREEN}✅ File verified: $(du -h "$file" | cut -f1)${NC}"
 }
 
-# ======================== SMART EXTRACT FOR AOSP ========================
-smart_extract_aosp() {
-    local archive="$1"
-    local target="$2"
-    local temp_extract="$TEMP_DIR/extract_aosp"
-    mkdir -p "$temp_extract"
-    
-    echo -e "${CYAN}📦 Extracting AOSP archive to temporary location...${NC}"
-    if ! tar -xf "$archive" -C "$temp_extract"; then
-        handle_error "Failed to extract archive"
-    fi
-    
-    # Cari file clang
-    local clang_path
-    clang_path=$(find "$temp_extract" -type f -name "clang" -executable | head -1)
-    if [[ -z "$clang_path" ]]; then
-        # Coba tanpa executable flag
-        clang_path=$(find "$temp_extract" -type f -name "clang" | head -1)
-        if [[ -z "$clang_path" ]]; then
-            handle_error "clang binary not found in extracted archive"
-        fi
-    fi
-    
-    log_info "Found clang at: $clang_path"
-    
-    # Tentukan direktori bin
-    local bin_dir
-    bin_dir=$(dirname "$clang_path")
-    
-    if [[ "$(basename "$bin_dir")" != "bin" ]]; then
-        log_warning "clang is not in a 'bin' directory. Copying binaries manually."
-        mkdir -p "$target/bin"
-        cp -L "$clang_path" "$target/bin/"
-        # Cari ld.lld di lokasi yang sama
-        local lld_path
-        lld_path=$(find "$temp_extract" -type f -name "ld.lld" | head -1)
-        if [[ -n "$lld_path" ]]; then
-            cp -L "$lld_path" "$target/bin/"
-        else
-            log_warning "ld.lld not found, will use system linker?"
-        fi
-    else
-        # Struktur normal: clang di dalam bin
-        local parent_dir
-        parent_dir=$(dirname "$bin_dir")
-        # Pindahkan bin directory ke target/bin
-        rm -rf "$target/bin" 2>/dev/null || true
-        mv "$bin_dir" "$target/bin"
-        # Pindahkan juga direktori penting lain seperti lib, lib64, include, share
-        for dir in lib lib64 include share; do
-            if [[ -d "$parent_dir/$dir" ]]; then
-                mv "$parent_dir/$dir" "$target/" 2>/dev/null || true
-            fi
-        done
-    fi
-    
-    # Pastikan binary dapat dieksekusi
-    chmod -R +x "$target/bin" 2>/dev/null || true
-    
-    # Bersihkan
-    rm -rf "$temp_extract"
-    log_success "AOSP toolchain extracted and organized successfully!"
-}
-
 # ======================== KERNEL CLONE ========================
 echo -e "${MAGENTA}📥 Step 1: Cloning Kernel Sources...${NC}"
 if git clone --depth=1 --recurse-submodules --shallow-submodules \
@@ -169,8 +105,13 @@ case "$USE_CLANG" in
         fi
         download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        # Gunakan smart_extract untuk AOSP
-        smart_extract_aosp "$TEMP_DIR/$local_archive_name" "$CLANG_ROOTDIR"
+        # Ekstrak dengan strip-components=1 (sama seperti Greenforce)
+        echo -e "${CYAN}📁 Extracting AOSP toolchain (strip-components=1)...${NC}"
+        if tar -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=1; then
+            log_success "AOSP toolchain extracted successfully! ✅"
+        else
+            handle_error "Failed to extract AOSP toolchain archive"
+        fi
         ;;
     
     "greenforce")
@@ -183,7 +124,7 @@ case "$USE_CLANG" in
         fi
         download_with_retry "$LATEST_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        # Untuk Greenforce, gunakan metode lama yang terbukti berhasil
+        # Ekstrak dengan strip-components=1
         echo -e "${CYAN}📁 Extracting Greenforce toolchain (strip-components=1)...${NC}"
         if tar -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=1; then
             log_success "Greenforce toolchain extracted successfully! ✅"
