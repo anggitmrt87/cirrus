@@ -2,6 +2,7 @@
 
 set -e
 
+# 🎨 Color codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -72,6 +73,71 @@ verify_download() {
     echo -e "${GREEN}✅ File verified: $(du -h "$file" | cut -f1)${NC}"
 }
 
+# ======================== SMART EXTRACT FOR AOSP ========================
+smart_extract_aosp() {
+    local archive="$1"
+    local target="$2"
+    local temp_extract="$TEMP_DIR/extract_aosp"
+    mkdir -p "$temp_extract"
+    
+    echo -e "${CYAN}📦 Extracting AOSP archive to temporary location...${NC}"
+    if ! tar -xf "$archive" -C "$temp_extract"; then
+        handle_error "Failed to extract archive"
+    fi
+    
+    # Cari file clang
+    local clang_path
+    clang_path=$(find "$temp_extract" -type f -name "clang" -executable | head -1)
+    if [[ -z "$clang_path" ]]; then
+        # Coba tanpa executable flag
+        clang_path=$(find "$temp_extract" -type f -name "clang" | head -1)
+        if [[ -z "$clang_path" ]]; then
+            handle_error "clang binary not found in extracted archive"
+        fi
+    fi
+    
+    log_info "Found clang at: $clang_path"
+    
+    # Tentukan direktori bin
+    local bin_dir
+    bin_dir=$(dirname "$clang_path")
+    
+    if [[ "$(basename "$bin_dir")" != "bin" ]]; then
+        log_warning "clang is not in a 'bin' directory. Copying binaries manually."
+        mkdir -p "$target/bin"
+        cp -L "$clang_path" "$target/bin/"
+        # Cari ld.lld di lokasi yang sama
+        local lld_path
+        lld_path=$(find "$temp_extract" -type f -name "ld.lld" | head -1)
+        if [[ -n "$lld_path" ]]; then
+            cp -L "$lld_path" "$target/bin/"
+        else
+            log_warning "ld.lld not found, will use system linker?"
+        fi
+    else
+        # Struktur normal: clang di dalam bin
+        local parent_dir
+        parent_dir=$(dirname "$bin_dir")
+        # Pindahkan bin directory ke target/bin
+        rm -rf "$target/bin" 2>/dev/null || true
+        mv "$bin_dir" "$target/bin"
+        # Pindahkan juga direktori penting lain seperti lib, lib64, include, share
+        for dir in lib lib64 include share; do
+            if [[ -d "$parent_dir/$dir" ]]; then
+                mv "$parent_dir/$dir" "$target/" 2>/dev/null || true
+            fi
+        done
+    fi
+    
+    # Pastikan binary dapat dieksekusi
+    chmod -R +x "$target/bin" 2>/dev/null || true
+    
+    # Bersihkan
+    rm -rf "$temp_extract"
+    log_success "AOSP toolchain extracted and organized successfully!"
+}
+
+# ======================== KERNEL CLONE ========================
 echo -e "${MAGENTA}📥 Step 1: Cloning Kernel Sources...${NC}"
 if git clone --depth=1 --recurse-submodules --shallow-submodules \
     --branch "$KERNEL_BRANCH" \
@@ -94,59 +160,6 @@ echo -e "${MAGENTA}🔧 Step 2: Setting up Toolchain ($USE_CLANG)...${NC}"
 mkdir -p "$CLANG_ROOTDIR"
 
 local_archive_name=""
-smart_extract() {
-    local archive="$1"
-    local target="$2"
-    local temp_extract="$TEMP_DIR/extract"
-    mkdir -p "$temp_extract"
-    
-    echo -e "${CYAN}📦 Extracting archive to temporary location...${NC}"
-    if ! tar -xf "$archive" -C "$temp_extract"; then
-        handle_error "Failed to extract archive"
-    fi
-    
-    local clang_path
-    clang_path=$(find "$temp_extract" -type f -name "clang" -executable | head -1)
-    if [[ -z "$clang_path" ]]; then
-        clang_path=$(find "$temp_extract" -type f -name "clang" | head -1)
-        if [[ -z "$clang_path" ]]; then
-            handle_error "clang binary not found in extracted archive"
-        fi
-    fi
-    
-    log_info "Found clang at: $clang_path"
-    
-    local bin_dir
-    bin_dir=$(dirname "$clang_path")
-    if [[ "$(basename "$bin_dir")" != "bin" ]]; then
-        log_warning "clang is not in a 'bin' directory. Using its parent as bin."
-        mkdir -p "$target/bin"
-        cp -L "$clang_path" "$target/bin/"
-        local lld_path
-        lld_path=$(find "$temp_extract" -type f -name "ld.lld" | head -1)
-        if [[ -n "$lld_path" ]]; then
-            cp -L "$lld_path" "$target/bin/"
-        else
-            log_warning "ld.lld not found, will use system linker?"
-        fi
-    else
-        local parent_dir
-        parent_dir=$(dirname "$bin_dir")
-        rm -rf "$target/bin" 2>/dev/null || true
-        mv "$bin_dir" "$target/bin"
-        for dir in lib lib64 include share; do
-            if [[ -d "$parent_dir/$dir" ]]; then
-                mv "$parent_dir/$dir" "$target/" 2>/dev/null || true
-            fi
-        done
-    fi
-    
-    chmod -R +x "$target/bin" 2>/dev/null || true
-    
-    rm -rf "$temp_extract"
-    log_success "Toolchain extracted and organized successfully!"
-}
-
 case "$USE_CLANG" in
     "aosp")
         local_archive_name="aosp-clang.tar.gz"
@@ -156,7 +169,8 @@ case "$USE_CLANG" in
         fi
         download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        smart_extract "$TEMP_DIR/$local_archive_name" "$CLANG_ROOTDIR"
+        # Gunakan smart_extract untuk AOSP
+        smart_extract_aosp "$TEMP_DIR/$local_archive_name" "$CLANG_ROOTDIR"
         ;;
     
     "greenforce")
@@ -169,7 +183,13 @@ case "$USE_CLANG" in
         fi
         download_with_retry "$LATEST_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        smart_extract "$TEMP_DIR/$local_archive_name" "$CLANG_ROOTDIR"
+        # Untuk Greenforce, gunakan metode lama yang terbukti berhasil
+        echo -e "${CYAN}📁 Extracting Greenforce toolchain (strip-components=1)...${NC}"
+        if tar -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=1; then
+            log_success "Greenforce toolchain extracted successfully! ✅"
+        else
+            handle_error "Failed to extract Greenforce toolchain archive"
+        fi
         ;;
     
     *)
@@ -177,32 +197,57 @@ case "$USE_CLANG" in
         ;;
 esac
 
-rm -rf "$TEMP_DIR"
+# 🧹 Clean up temporary files (archive still in TEMP_DIR, but we'll delete it after extraction)
+rm -rf "$TEMP_DIR"/*
 echo -e "${GREEN}🧹 Temporary files cleaned${NC}"
 
+# 🔍 Verifikasi akhir (robust)
 echo ""
 echo -e "${MAGENTA}🔍 Step 3: Verifying toolchain installation...${NC}"
-if [[ -f "$CLANG_ROOTDIR/bin/clang" && -f "$CLANG_ROOTDIR/bin/ld.lld" ]]; then
-    CLANG_VERSION=$("$CLANG_ROOTDIR/bin/clang" --version | head -n1)
-    LLD_VERSION=$("$CLANG_ROOTDIR/bin/ld.lld" --version | head -n1)
-    echo -e "${GREEN}✅ Clang: $CLANG_VERSION${NC}"
-    echo -e "${GREEN}✅ LLD: $LLD_VERSION${NC}"
-    
-    chmod -R +x "$CLANG_ROOTDIR/bin" 2>/dev/null || log_warning "Could not set execute permissions on toolchain binaries"
-else
+
+# Pastikan bin directory ada
+mkdir -p "$CLANG_ROOTDIR/bin"
+
+# Jika clang tidak ditemukan di bin, cari dan buat symlink
+if [[ ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
+    log_warning "clang not found in expected location, searching recursively..."
     clang_found=$(find "$CLANG_ROOTDIR" -type f -name "clang" -executable | head -1)
     if [[ -n "$clang_found" ]]; then
-        log_warning "clang found at $clang_found but not in expected location"
-        mkdir -p "$CLANG_ROOTDIR/bin"
+        log_info "Found clang at: $clang_found"
         ln -sf "$clang_found" "$CLANG_ROOTDIR/bin/clang"
-        lld_found=$(find "$CLANG_ROOTDIR" -type f -name "ld.lld" -executable | head -1)
-        if [[ -n "$lld_found" ]]; then
-            ln -sf "$lld_found" "$CLANG_ROOTDIR/bin/ld.lld"
-        fi
-        echo -e "${GREEN}✅ Fixed symlinks created${NC}"
+        log_success "Created symlink for clang"
     else
-        handle_error "Toolchain verification failed: essential binaries not found"
+        handle_error "clang binary not found anywhere in $CLANG_ROOTDIR"
     fi
+fi
+
+# Jika ld.lld tidak ditemukan di bin, cari dan buat symlink
+if [[ ! -f "$CLANG_ROOTDIR/bin/ld.lld" ]]; then
+    log_warning "ld.lld not found in expected location, searching recursively..."
+    lld_found=$(find "$CLANG_ROOTDIR" -type f -name "ld.lld" -executable | head -1)
+    if [[ -n "$lld_found" ]]; then
+        log_info "Found ld.lld at: $lld_found"
+        ln -sf "$lld_found" "$CLANG_ROOTDIR/bin/ld.lld"
+        log_success "Created symlink for ld.lld"
+    else
+        log_warning "ld.lld not found. This might be okay if your build uses another linker."
+    fi
+fi
+
+# Pastikan binary dapat dieksekusi
+chmod -R +x "$CLANG_ROOTDIR/bin" 2>/dev/null || true
+
+# Tampilkan versi
+if [[ -f "$CLANG_ROOTDIR/bin/clang" ]]; then
+    CLANG_VERSION=$("$CLANG_ROOTDIR/bin/clang" --version | head -n1)
+    echo -e "${GREEN}✅ Clang: $CLANG_VERSION${NC}"
+else
+    handle_error "clang still not accessible after symlink creation"
+fi
+
+if [[ -f "$CLANG_ROOTDIR/bin/ld.lld" ]]; then
+    LLD_VERSION=$("$CLANG_ROOTDIR/bin/ld.lld" --version | head -n1)
+    echo -e "${GREEN}✅ LLD: $LLD_VERSION${NC}"
 fi
 
 echo ""
