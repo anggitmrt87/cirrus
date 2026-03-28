@@ -316,7 +316,6 @@ install_kernelsu() {
 compile_kernel() {
     cd "$KERNEL_ROOTDIR"
     
-    # 🧹 Clean working directory
     log_step "Step 1/4: Cleaning working directory... 🧹"
     git clean -fdx
     
@@ -328,18 +327,18 @@ compile_kernel() {
     log_step "Step 3/4: Configuring defconfig... ⚙️"
     rm -f "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.old"
     
-    # 🔧 Handle multiple defconfig fragments
+    # Defconfig fragments handling
     IFS=' ' read -r -a defconfig_array <<< "$DEVICE_DEFCONFIG"
     primary_defconfig="${defconfig_array[0]}"
     fragments=("${defconfig_array[@]:1}")
     
     echo -e "${CYAN}⚙️  Configuring primary defconfig: $primary_defconfig${NC}"
-    if ! make $BUILD_OPTIONS ARCH=arm64 "$primary_defconfig" O="$KERNEL_OUTDIR" 2>&1; then
+    if ! make $BUILD_OPTIONS ARCH=arm64 "$primary_defconfig" O="$KERNEL_OUTDIR" \
+            LLVM=1 LLVM_IAS=1 2>&1; then
         log_error "Primary defconfig configuration failed! 💥"
         return 1
     fi
     
-    # Gabungkan fragmen tambahan jika ada
     if [[ ${#fragments[@]} -gt 0 ]]; then
         log_info "Merging additional config fragments: ${fragments[*]}"
         for frag in "${fragments[@]}"; do
@@ -354,9 +353,9 @@ compile_kernel() {
                 log_warning "Fragment $frag not found at $frag_path, skipping"
             fi
         done
-        # Perbarui konfigurasi setelah merge
         log_info "Updating defconfig after merge..."
-        if ! make $BUILD_OPTIONS ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" 2>&1; then
+        if ! make $BUILD_OPTIONS ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" \
+                LLVM=1 LLVM_IAS=1 2>&1; then
             log_error "Failed to update defconfig after merge"
             return 1
         fi
@@ -364,7 +363,7 @@ compile_kernel() {
     
     log_step "Step 4/4: Starting kernel compilation... 🔨"
     
-    # 💾 CCache configuration
+    # CCache setup
     if [[ "$CCACHE" == "true" ]]; then
         export CC="ccache clang"
         log_info "CCache statistics before build: 📊"
@@ -374,17 +373,15 @@ compile_kernel() {
     fi
     
     if [[ "$DISABLE_LOCALVERSION_ST" == "true" ]]; then
-        rm -rf localversion
-        rm -rf localversion-st
-        rm -rf localversion-cip
+        rm -rf localversion localversion-st localversion-cip 2>/dev/null || true
     fi
     
     local build_targets=("$TYPE_IMAGE")
     [[ "$BUILD_DTBO" == "true" ]] && build_targets+=("dtbo.img")
     
-    # 📊 Progress indicator
     echo -e "${BOLD_CYAN}⏳ Starting compilation with ${NUM_CORES} cores...${NC}"
     
+    # Set cross-compile prefix sesuai USE_CLANG
     if [[ "$USE_CLANG" == "aosp" ]]; then
         CROSS_COMPILE="aarch64-linux-android-"
         CROSS_COMPILE_ARM32="arm-linux-androideabi-"
@@ -395,9 +392,12 @@ compile_kernel() {
         CLANG_TRIPLE="aarch64-linux-gnu-"
     fi
     
+    # 🔥 Perintah make dengan LLVM dan IAS diaktifkan
     if ! make $BUILD_OPTIONS \
             ARCH=arm64 \
             O="$KERNEL_OUTDIR" \
+            LLVM=1 \
+            LLVM_IAS=1 \
             CC="$CC" \
             AS="llvm-as" \
             AR="llvm-ar" \
@@ -421,7 +421,7 @@ compile_kernel() {
     
     log_success "Kernel compilation completed! 🎉"
     
-    # ✅ Verify output
+    # Verify output
     if [[ ! -f "$IMAGE" ]]; then
         log_error "Kernel Image not found at expected location: $IMAGE ❌"
         return 1
@@ -429,7 +429,6 @@ compile_kernel() {
     
     log_success "Build verification completed! ✅"
     
-    # 📊 Show CCache statistics if enabled
     if [[ "$CCACHE" == "true" ]]; then
         log_info "CCache statistics after build: 📊"
         ccache -s
