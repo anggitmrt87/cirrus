@@ -107,7 +107,7 @@ case "$USE_CLANG" in
         verify_download "$TEMP_DIR/$local_archive_name"
         # Ekstrak dengan strip-components=1 (sama seperti Greenforce)
         echo -e "${CYAN}📁 Extracting AOSP toolchain (strip-components=1)...${NC}"
-        if tar -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=1; then
+        if tar -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=0; then
             log_success "AOSP toolchain extracted successfully! ✅"
         else
             handle_error "Failed to extract AOSP toolchain archive"
