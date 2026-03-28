@@ -123,7 +123,7 @@ setup_env() {
         export CCACHE_EXEC=$(which ccache)
         export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
         if [[ "$USE_CLANG" == "aosp" ]]; then
-            export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:$PATH:$GCC32_ROOTDIR/bin:$PATH:$GCC64_ROOTDIR/bin:$PATH"
+            export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:$GCC32_ROOTDIR/bin:$GCC64_ROOTDIR/bin:$PATH"
         else
             export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:$PATH"
         fi
@@ -134,7 +134,7 @@ setup_env() {
         log_info "CCache enabled: $CCACHE_DIR (max: $CCACHE_MAXSIZE) 💿"
     else
         if [[ "$USE_CLANG" == "aosp" ]]; then
-            export PATH="$CLANG_ROOTDIR/bin:$PATH:$GCC32_ROOTDIR/bin:$PATH:$GCC64_ROOTDIR/bin:$PATH"
+            export PATH="$CLANG_ROOTDIR/bin:$GCC32_ROOTDIR/bin:$GCC64_ROOTDIR/bin:$PATH"
         else
             export PATH="$CLANG_ROOTDIR/bin:$PATH"
         fi
