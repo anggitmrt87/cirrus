@@ -40,8 +40,8 @@ export GCC64_ROOTDIR="${GCC64_ROOTDIR:-$CIRRUS_WORKING_DIR/gcc64}"
 export TEMP_DIR="$CIRRUS_WORKING_DIR/tmp_downloads"
 mkdir -p "$TEMP_DIR"
 
-if ! command -v aria2c &> /dev/null; then
-    handle_error "aria2c tidak ditemukan. Pastikan sudah diinstall (apt-get install aria2)"
+if ! command -v wget &> /dev/null; then
+    handle_error "wget not found. Please install it (apt-get install wget)"
 fi
 
 download_with_retry() {
@@ -55,7 +55,15 @@ download_with_retry() {
     
     while [[ $attempt -le $retries ]]; do
         echo -e "${BLUE}🔄 Attempt $attempt/$retries...${NC}"
-        if aria2c --check-certificate=false -x 16 -s 16 "$url" -d "$TEMP_DIR" -o "$dest_file" --console-log-level=warn; then
+        # Use wget with:
+        # -nv  : non-verbose (still shows errors)
+        # -c   : continue partially downloaded files
+        # --tries=1 : we manage retries ourselves
+        # --timeout=30 : connection timeout
+        # --no-check-certificate : ignore SSL issues
+        # -O   : output file
+        if wget -nv -c --tries=1 --timeout=30 --no-check-certificate \
+            -O "$TEMP_DIR/$dest_file" "$url"; then
             echo -e "${GREEN}✅ Download successful${NC}"
             return 0
         fi
@@ -102,12 +110,12 @@ case "$USE_CLANG" in
     "aosp")
         local_archive_name="aosp-clang.tar.gz"
         log_info "Using AOSP Clang toolchain ⚙️"
-        if ! curl --head --silent --fail "$AOSP_CLANG_URL" > /dev/null; then
-            handle_error "AOSP Clang URL tidak dapat diakses: $AOSP_CLANG_URL"
+        if ! wget --spider --quiet --no-check-certificate "$AOSP_CLANG_URL" 2>/dev/null; then
+            handle_error "AOSP Clang URL is not accessible: $AOSP_CLANG_URL"
         fi
         download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        # Ekstrak dengan strip-components=1 (sama seperti Greenforce)
+        # Extract with strip-components=1 (same as Greenforce)
         echo -e "${CYAN}📁 Extracting AOSP toolchain...${NC}"
         if tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR"; then
             log_success "AOSP toolchain extracted successfully! ✅"
@@ -121,14 +129,14 @@ case "$USE_CLANG" in
     "greenforce")
         local_archive_name="greenforce-clang.tar.gz"
         log_info "Using Greenforce Clang toolchain ⚡"
-        GREENFORCE_SCRIPT=$(curl -sL --fail https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_latest_url.sh) || handle_error "Gagal mengambil script Greenforce"
+        GREENFORCE_SCRIPT=$(wget -qO- --no-check-certificate https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_latest_url.sh) || handle_error "Failed to fetch Greenforce script"
         source /dev/stdin <<< "$GREENFORCE_SCRIPT"
         if [[ -z "$LATEST_URL" ]]; then
-            handle_error "LATEST_URL tidak ditemukan dari script Greenforce"
+            handle_error "LATEST_URL not found from Greenforce script"
         fi
         download_with_retry "$LATEST_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        # Ekstrak dengan strip-components=1
+        # Extract with strip-components=1
         echo -e "${CYAN}📁 Extracting Greenforce toolchain...${NC}"
         if tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR"; then
             log_success "Greenforce toolchain extracted successfully! ✅"
