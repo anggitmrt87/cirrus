@@ -114,8 +114,8 @@ case "$USE_CLANG" in
         else
             handle_error "Failed to extract AOSP toolchain archive"
         fi
-        git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git -b android12L-release $GCC64_ROOTDIR
-        git clone https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git -b android12L-release $GCC32_ROOTDIR
+        git clone --depth=1 --recurse-submodules --shallow-submodules https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git -b android-msm-redbull-4.19-android14-release $GCC64_ROOTDIR
+        git clone --depth=1 --recurse-submodules --shallow-submodules https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git -b android-msm-redbull-4.19-android14-release $GCC32_ROOTDIR
         ;;
     
     "greenforce")
