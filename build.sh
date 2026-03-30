@@ -239,31 +239,31 @@ display_banner() {
     clear
     echo -e "${BOLD_CYAN}"
     cat << "BANNER"
-╔══════════════════════════════════════════════════════════════════╗
-║                                                                  ║
-║        ███╗   ███╗██████╗ ████████╗                             ║
-║        ████╗ ████║██╔══██╗╚══██╔══╝                             ║
-║        ██╔████╔██║██████╔╝   ██║                                ║
-║        ██║╚██╔╝██║██╔══██╗   ██║                                ║
-║        ██║ ╚═╝ ██║██║  ██║   ██║                                ║
-║        ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝                                ║
-║                  K E R N E L   B U I L D E R                     ║
-║                                                                  ║
-╚══════════════════════════════════════════════════════════════════╝
+╔════════════════════════════════════════╗
+║                                                                   ║
+║        ███╗     ███╗ ██████╗  ████████╗           ║
+║        ████╗  ████║ ██╔══██╗╚══██╔══╝           ║
+║        ██╔████╔██║ ██████╔╝     ██║                ║
+║        ██║╚██╔╝██║ ██╔══██╗     ██║                ║
+║        ██║ ╚═╝  ██║ ██║    ██║     ██║                ║
+║        ╚═╝        ╚═╝ ╚═╝    ╚═╝     ╚═╝                ║
+║                  K E R N E L   B U I L D E R                      ║
+║                                                                   ║
+╚════════════════════════════════════════╝
 BANNER
     echo -e "${NC}"
     
-    echo -e "${BOLD_BLUE}╔══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BOLD_BLUE}╔═══════════════════════════════════════╗${NC}"
     echo -e "${BOLD_BLUE}║                       🚀 BUILD INFORMATION                      ║${NC}"
-    echo -e "${BOLD_BLUE}╠══════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${BOLD_BLUE}╠═══════════════════════════════════════╣${NC}"
     echo -e "${BOLD_BLUE}║${NC} 👤 ${WHITE}BUILDER NAME${NC}         = ${GREEN}${KBUILD_BUILD_USER}${NC}"
     echo -e "${BOLD_BLUE}║${NC} 🏠 ${WHITE}BUILDER HOSTNAME${NC}     = ${GREEN}${KBUILD_BUILD_HOST}${NC}"
     echo -e "${BOLD_BLUE}║${NC} 📱 ${WHITE}DEVICE_CODENAME${NC}      = ${YELLOW}${DEVICE_CODENAME}${NC}"
     echo -e "${BOLD_BLUE}║${NC} ⚙️  ${WHITE}DEVICE_DEFCONFIG${NC}    = ${YELLOW}${DEVICE_DEFCONFIG}${NC}"
-    echo -e "${BOLD_BLUE}║${NC} 🛠️  ${WHITE}TOOLCHAIN_VERSION${NC}  = ${CYAN}${KBUILD_COMPILER_STRING}${NC}"
+    echo -e "${BOLD_BLUE}║${NC} 🛠️  ${WHITE}TOOLCHAIN_VERSION${NC}   = ${CYAN}${KBUILD_COMPILER_STRING}${NC}"
     echo -e "${BOLD_BLUE}║${NC} 💾 ${WHITE}BUILD OPTIONS${NC}        = ${MAGENTA}${BUILD_OPTIONS}${NC}"
     echo -e "${BOLD_BLUE}║${NC} ⚡ ${WHITE}AVAILABLE CORES${NC}      = ${GREEN}${NUM_CORES}${NC}"
-    echo -e "${BOLD_BLUE}╚══════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${BOLD_BLUE}╚═══════════════════════════════════════╝${NC}"
     echo ""
 }
 
@@ -363,38 +363,11 @@ compile_kernel() {
     
     log_step "Step 4/4: Starting kernel compilation... 🔨"
     
-    # CCache setup
-    if [[ "$CCACHE" == "true" ]]; then
-        export CC="ccache clang"
-        log_info "CCache statistics before build: 📊"
-        ccache -s
-    else
-        export CC="clang"
-    fi
-    
-    if [[ "$DISABLE_LOCALVERSION_ST" == "true" ]]; then
-        rm -rf localversion localversion-st localversion-cip 2>/dev/null || true
-    fi
-    
     local build_targets=("$TYPE_IMAGE")
     [[ "$BUILD_DTBO" == "true" ]] && build_targets+=("dtbo.img")
     
     echo -e "${BOLD_CYAN}⏳ Starting compilation with ${NUM_CORES} cores...${NC}"
     
-    # Set cross-compile prefix sesuai USE_CLANG
-    if [[ "$USE_CLANG" == "aosp" ]]; then
-        export HOSTCC="gcc"
-        export CROSS_COMPILE="aarch64-linux-android-"
-        export CROSS_COMPILE_ARM32="arm-linux-androideabi-"
-        export CLANG_TRIPLE="aarch64-linux-gnu-"
-    else
-        export HOSTCC="clang"
-        export CROSS_COMPILE="aarch64-linux-gnu-"
-        export CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
-        export CLANG_TRIPLE="aarch64-linux-gnu-"
-    fi
-    
-    # 🔥 Perintah make dengan LLVM dan IAS diaktifkan
     if ! make $BUILD_OPTIONS \
             ARCH=arm64 \
             O="$KERNEL_OUTDIR" \
@@ -692,9 +665,9 @@ send_config() {
 
 main() {
     echo -e "${BOLD_CYAN}"
-    echo "╔══════════════════════════════════════════════════════════════════╗"
+    echo "╔═══════════════════════════════════════╗"
     echo "║                    🚀 KERNEL BUILD PROCESS                       ║"
-    echo "╚══════════════════════════════════════════════════════════════════╝"
+    echo "╚═══════════════════════════════════════╝"
     echo -e "${NC}"
     
     log_step "Starting optimized kernel build process... 🚀"

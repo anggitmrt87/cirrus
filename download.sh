@@ -12,9 +12,9 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 echo -e "${CYAN}"
-echo "╔══════════════════════════════════════════════════════════════════╗"
+echo "╔═══════════════════════════════════════╗"
 echo "║            📥 SOURCE & TOOLCHAIN DOWNLOADER                     ║"
-echo "╚══════════════════════════════════════════════════════════════════╝"
+echo "╚═══════════════════════════════════════╝"
 echo -e "${NC}"
 
 handle_error() {
@@ -197,12 +197,12 @@ fi
 
 echo ""
 echo -e "${GREEN}"
-echo "╔══════════════════════════════════════════════════════════════════╗"
+echo "╔═══════════════════════════════════════╗"
 echo "║              ✅ SYNC TASKS COMPLETED SUCCESSFULLY!              ║"
-echo "╠══════════════════════════════════════════════════════════════════╣"
-echo "║   📱 Device: $DEVICE_CODENAME                                  ║"
-echo "║   ⚙️  Toolchain: $USE_CLANG                                    ║"
-echo "║   🌿 Kernel Branch: $KERNEL_BRANCH                             ║"
-echo "║   📁 Toolchain Path: $CLANG_ROOTDIR                            ║"
-echo "╚══════════════════════════════════════════════════════════════════╝"
+echo "╠═══════════════════════════════════════╣"
+echo "║   📱 Device: $DEVICE_CODENAME"
+echo "║   ⚙️  Toolchain: $USE_CLANG"
+echo "║   🌿 Kernel Branch: $KERNEL_BRANCH"
+echo "║   📁 Toolchain Path: $CLANG_ROOTDIR"
+echo "╚═══════════════════════════════════════╝"
 echo -e "${NC}"
