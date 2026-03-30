@@ -108,8 +108,8 @@ case "$USE_CLANG" in
         download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
         # Ekstrak dengan strip-components=1 (sama seperti Greenforce)
-        echo -e "${CYAN}📁 Extracting AOSP toolchain (strip-components=1)...${NC}"
-        if tar -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=0; then
+        echo -e "${CYAN}📁 Extracting AOSP toolchain...${NC}"
+        if tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR"; then
             log_success "AOSP toolchain extracted successfully! ✅"
         else
             handle_error "Failed to extract AOSP toolchain archive"
@@ -129,8 +129,8 @@ case "$USE_CLANG" in
         download_with_retry "$LATEST_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
         # Ekstrak dengan strip-components=1
-        echo -e "${CYAN}📁 Extracting Greenforce toolchain (strip-components=1)...${NC}"
-        if tar -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=1; then
+        echo -e "${CYAN}📁 Extracting Greenforce toolchain...${NC}"
+        if tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR"; then
             log_success "Greenforce toolchain extracted successfully! ✅"
         else
             handle_error "Failed to extract Greenforce toolchain archive"
