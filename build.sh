@@ -383,19 +383,22 @@ compile_kernel() {
     
     # Set cross-compile prefix sesuai USE_CLANG
     if [[ "$USE_CLANG" == "aosp" ]]; then
-        CROSS_COMPILE="aarch64-linux-android-"
-        CROSS_COMPILE_ARM32="arm-linux-androideabi-"
-        CLANG_TRIPLE="aarch64-linux-gnu-"
+        export HOSTCC="gcc"
+        export CROSS_COMPILE="aarch64-linux-android-"
+        export CROSS_COMPILE_ARM32="arm-linux-androideabi-"
+        export CLANG_TRIPLE="aarch64-linux-gnu-"
     else
-        CROSS_COMPILE="aarch64-linux-gnu-"
-        CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
-        CLANG_TRIPLE="aarch64-linux-gnu-"
+        export HOSTCC="clang"
+        export CROSS_COMPILE="aarch64-linux-gnu-"
+        export CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+        export CLANG_TRIPLE="aarch64-linux-gnu-"
     fi
     
     # 🔥 Perintah make dengan LLVM dan IAS diaktifkan
     if ! make $BUILD_OPTIONS \
             ARCH=arm64 \
             O="$KERNEL_OUTDIR" \
+            CC=clang \
             HOSTCC=gcc \
             LD=ld.lld \
             AS=llvm-as \
