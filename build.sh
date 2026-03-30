@@ -84,7 +84,7 @@ setup_env() {
     mkdir -p "$KERNEL_OUTDIR" "$ANYKERNEL_DIR"
 
     # 🛤️ PATH setup
-    export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib:$LD_LIBRARY_PATH"
+    export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib"
 
     # 🔧 Toolchain validation
     if [[ ! -d "$CLANG_ROOTDIR" || ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
@@ -398,20 +398,8 @@ compile_kernel() {
     if ! make $BUILD_OPTIONS \
             ARCH=arm64 \
             O="$KERNEL_OUTDIR" \
-            CC=clang \
-            HOSTCC=gcc \
-            LD=ld.lld \
-            AS=llvm-as \
-            AR=llvm-ar \
-            NM=llvm-nm \
-            OBJCOPY=llvm-objcopy \
-            OBJDUMP=llvm-objdump \
-            STRIP=llvm-strip \
             LLVM=1 \
             LLVM_IAS=1 \
-            CROSS_COMPILE="$CROSS_COMPILE" \
-            CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" \
-            CLANG_TRIPLE="$CLANG_TRIPLE" \
             "${build_targets[@]}"; then
         log_error "Kernel compilation failed - check $BUILD_LOG for details 💥"
         return 1
