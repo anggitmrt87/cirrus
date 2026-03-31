@@ -13,21 +13,13 @@ NC='\033[0m'
 
 echo -e "${CYAN}"
 echo "╔═══════════════════════════════════════╗"
-echo "║            📥 SOURCE & TOOLCHAIN DOWNLOADER                     ║"
+echo "║      📥 SOURCE & TOOLCHAIN DOWNLOADER  ║"
 echo "╚═══════════════════════════════════════╝"
 echo -e "${NC}"
 
 handle_error() {
     echo -e "${RED}❌ [ERROR] $1${NC}"
     exit 1
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠️ [WARNING] $1${NC}"
-}
-
-log_success() {
-    echo -e "${GREEN}✅ [SUCCESS] $1${NC}"
 }
 
 log_info() {
@@ -81,12 +73,10 @@ if git clone --depth=1 --recurse-submodules --shallow-submodules \
     --branch "$KERNEL_BRANCH" \
     "$KERNEL_SOURCE" \
     "$CIRRUS_WORKING_DIR/$DEVICE_CODENAME" 2>&1; then
-    log_success "Kernel sources cloned successfully! 🎉"
+    echo -e "${GREEN}✅ Kernel sources cloned successfully! 🎉${NC}"
     
     cd "$CIRRUS_WORKING_DIR/$DEVICE_CODENAME"
-    if [[ -d ".git" ]]; then
-        echo -e "${GREEN}✅ Git repository verified${NC}"
-    else
+    if [[ ! -d ".git" ]]; then
         handle_error "Cloned directory is not a valid git repository"
     fi
 else
@@ -107,13 +97,8 @@ case "$USE_CLANG" in
         fi
         download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        # Ekstrak dengan strip-components=1 (sama seperti Greenforce)
         echo -e "${CYAN}📁 Extracting AOSP toolchain...${NC}"
-        if tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR"; then
-            log_success "AOSP toolchain extracted successfully! ✅"
-        else
-            handle_error "Failed to extract AOSP toolchain archive"
-        fi
+        tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract AOSP toolchain"
         git clone --depth=1 --recurse-submodules --shallow-submodules https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git -b android-msm-redbull-4.19-android14-release $GCC64_ROOTDIR
         git clone --depth=1 --recurse-submodules --shallow-submodules https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git -b android-msm-redbull-4.19-android14-release $GCC32_ROOTDIR
         ;;
@@ -128,13 +113,8 @@ case "$USE_CLANG" in
         fi
         download_with_retry "$LATEST_URL" "$local_archive_name"
         verify_download "$TEMP_DIR/$local_archive_name"
-        # Ekstrak dengan strip-components=1
         echo -e "${CYAN}📁 Extracting Greenforce toolchain...${NC}"
-        if tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR"; then
-            log_success "Greenforce toolchain extracted successfully! ✅"
-        else
-            handle_error "Failed to extract Greenforce toolchain archive"
-        fi
+        tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract Greenforce toolchain"
         ;;
     
     *)
@@ -142,66 +122,17 @@ case "$USE_CLANG" in
         ;;
 esac
 
-# 🧹 Clean up temporary files (archive still in TEMP_DIR, but we'll delete it after extraction)
+# 🧹 Clean up temporary files
 rm -rf "$TEMP_DIR"/*
 echo -e "${GREEN}🧹 Temporary files cleaned${NC}"
-
-# 🔍 Verifikasi akhir (robust)
-echo ""
-echo -e "${MAGENTA}🔍 Step 3: Verifying toolchain installation...${NC}"
-
-# Pastikan bin directory ada
-mkdir -p "$CLANG_ROOTDIR/bin"
-
-# Jika clang tidak ditemukan di bin, cari dan buat symlink
-if [[ ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
-    log_warning "clang not found in expected location, searching recursively..."
-    clang_found=$(find "$CLANG_ROOTDIR" -type f -name "clang" -executable | head -1)
-    if [[ -n "$clang_found" ]]; then
-        log_info "Found clang at: $clang_found"
-        ln -sf "$clang_found" "$CLANG_ROOTDIR/bin/clang"
-        log_success "Created symlink for clang"
-    else
-        handle_error "clang binary not found anywhere in $CLANG_ROOTDIR"
-    fi
-fi
-
-# Jika ld.lld tidak ditemukan di bin, cari dan buat symlink
-if [[ ! -f "$CLANG_ROOTDIR/bin/ld.lld" ]]; then
-    log_warning "ld.lld not found in expected location, searching recursively..."
-    lld_found=$(find "$CLANG_ROOTDIR" -type f -name "ld.lld" -executable | head -1)
-    if [[ -n "$lld_found" ]]; then
-        log_info "Found ld.lld at: $lld_found"
-        ln -sf "$lld_found" "$CLANG_ROOTDIR/bin/ld.lld"
-        log_success "Created symlink for ld.lld"
-    else
-        log_warning "ld.lld not found. This might be okay if your build uses another linker."
-    fi
-fi
-
-# Pastikan binary dapat dieksekusi
-chmod -R +x "$CLANG_ROOTDIR/bin" 2>/dev/null || true
-
-# Tampilkan versi
-if [[ -f "$CLANG_ROOTDIR/bin/clang" ]]; then
-    CLANG_VERSION=$("$CLANG_ROOTDIR/bin/clang" --version | head -n1)
-    echo -e "${GREEN}✅ Clang: $CLANG_VERSION${NC}"
-else
-    handle_error "clang still not accessible after symlink creation"
-fi
-
-if [[ -f "$CLANG_ROOTDIR/bin/ld.lld" ]]; then
-    LLD_VERSION=$("$CLANG_ROOTDIR/bin/ld.lld" --version | head -n1)
-    echo -e "${GREEN}✅ LLD: $LLD_VERSION${NC}"
-fi
 
 echo ""
 echo -e "${GREEN}"
 echo "╔═══════════════════════════════════════╗"
-echo "║              ✅ SYNC TASKS COMPLETED SUCCESSFULLY!              ║"
+echo "║   ✅ DOWNLOAD TASKS COMPLETED SUCCESSFULLY!   ║"
 echo "╠═══════════════════════════════════════╣"
 echo "║   📱 Device: $DEVICE_CODENAME"
-echo "║   ⚙️  Toolchain: $USE_CLANG"
+echo "║   ⚙️ Toolchain: $USE_CLANG"
 echo "║   🌿 Kernel Branch: $KERNEL_BRANCH"
 echo "║   📁 Toolchain Path: $CLANG_ROOTDIR"
 echo "╚═══════════════════════════════════════╝"
