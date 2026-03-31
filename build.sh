@@ -32,7 +32,7 @@ log_progress(){ echo -e "${MAGENTA}📊 [PROGRESS]${NC} $1"; }
 # ------------------------------------------------------------------------------
 # 🌟 Global variables (will be set during runtime)
 # ------------------------------------------------------------------------------
-declare -g KERNEL_NAME="mrt-Kernel"
+declare -g KERNEL_NAME="mrt-kernel"
 declare -g START_TIME
 declare -g BUILD_STATUS="failed"
 declare -g BUILD_LOG="${CIRRUS_WORKING_DIR:-.}/build.log"
