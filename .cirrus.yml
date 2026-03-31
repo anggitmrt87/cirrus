@@ -19,7 +19,9 @@ env:
 
   # ⚙️ Toolchain Configuration
   USE_CLANG: "aosp" # "aosp" or "greenforce"
-  CLANG_ROOTDIR: "/tmp/cirrus-ci-build/clang"
+  CLANG_ROOTDIR: "$CIRRUS_WORKING_DIR/clang"
+  GCC32_ROOTDIR: "$CIRRUS_WORKING_DIR/gcc32"
+  GCC64_ROOTDIR: "$CIRRUS_WORKING_DIR/gcc64"
   AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/42d2c090c14c9c7f4dfd365ae551e2b959dc775c/clang-r584948b.tar.gz"
 
   # 🔧 Kernel Build Configuration

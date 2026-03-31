@@ -26,9 +26,6 @@ log_info() {
     echo -e "${BLUE}🔧 [INFO] $1${NC}"
 }
 
-export CLANG_ROOTDIR="${CLANG_ROOTDIR:-$CIRRUS_WORKING_DIR/clang}"
-export GCC32_ROOTDIR="${GCC32_ROOTDIR:-$CIRRUS_WORKING_DIR/gcc32}"
-export GCC64_ROOTDIR="${GCC64_ROOTDIR:-$CIRRUS_WORKING_DIR/gcc64}"
 export TEMP_DIR="$CIRRUS_WORKING_DIR/tmp_downloads"
 mkdir -p "$TEMP_DIR"
 

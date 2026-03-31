@@ -59,9 +59,7 @@ check_dependencies() {
 validate_environment() {
     log_step "Validating environment variables..."
     local required_vars=(
-        "CIRRUS_WORKING_DIR" "DEVICE_CODENAME" "TG_TOKEN" "TG_CHAT_ID"
-        "BUILD_USER" "BUILD_HOST" "ANYKERNEL" "ANYKERNEL_BRANCH"
-        "KERNEL_SOURCE" "KERNEL_BRANCH" "CLANG_ROOTDIR"
+        "DEVICE_CODENAME" "TG_TOKEN" "TG_CHAT_ID" "BUILD_USER" "BUILD_HOST" "ANYKERNEL" "ANYKERNEL_BRANCH" "KERNEL_SOURCE" "KERNEL_BRANCH"
     )
     [[ "${KPM_PATCH:-false}" == "true" ]] && required_vars+=("KPM_VERSION")
 
