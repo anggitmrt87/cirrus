@@ -278,7 +278,7 @@ configure_defconfig() {
     cd "$KERNEL_ROOTDIR"
     log_step "Configuring defconfig..."
 
-    make -j"$BUILD_OPTIONS" ARCH="$ARCH" "$DEVICE_DEFCONFIG" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
+    make "$BUILD_OPTIONS" ARCH="$ARCH" "$DEVICE_DEFCONFIG" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
         log_error "Configuring defconfig failed."
         return 1
     }
