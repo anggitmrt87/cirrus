@@ -278,7 +278,7 @@ configure_defconfig() {
     cd "$KERNEL_ROOTDIR"
     log_step "Configuring defconfig..."
 
-    make "$BUILD_OPTIONS" ARCH="$ARCH" "$DEVICE_DEFCONFIG" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
+    make "$BUILD_OPTIONS" ARCH="$ARCH" "$DEVICE_DEFCONFIG" O="$KERNEL_OUTDIR" all LLVM=1 LLVM_IAS=1 || {
         log_error "Configuring defconfig failed."
         return 1
     }
@@ -292,7 +292,7 @@ compile_kernel() {
     local targets=("$TYPE_IMAGE")
     [[ "${BUILD_DTBO:-false}" == "true" ]] && targets+=("dtbo.img")
 
-    if ! make "$BUILD_OPTIONS" ARCH="$ARCH" "$DEVICE_DEFCONFIG" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 "${targets[@]}" CROSS_COMPILE="$BUILD_CROSS_COMPILE" CROSS_COMPILE_ARM32="$BUILD_CROSS_COMPILE_ARM32" CLANG_TRIPLE="$BUILD_CLANG_TRIPLE"; then
+    if ! make "$BUILD_OPTIONS" ARCH="$ARCH" "$DEVICE_DEFCONFIG" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 "${targets[@]}" all CROSS_COMPILE="$BUILD_CROSS_COMPILE" CROSS_COMPILE_ARM32="$BUILD_CROSS_COMPILE_ARM32" CLANG_TRIPLE="$BUILD_CLANG_TRIPLE"; then
         log_error "Kernel compilation failed."
         return 1
     fi
