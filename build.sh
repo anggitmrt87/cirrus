@@ -278,31 +278,39 @@ configure_defconfig() {
     cd "$KERNEL_ROOTDIR"
     log_step "Configuring defconfig..."
 
-    # Pastikan file kernelsu.config bisa diakses dari root
-    if [[ -f "arch/arm64/configs/vendor/kernelsu.config" && ! -f "vendor/kernelsu.config" ]]; then
-        log_info "Creating symlink for kernelsu.config at root/vendor/"
-        mkdir -p vendor
-        ln -sf "../arch/arm64/configs/vendor/kernelsu.config" "vendor/kernelsu.config"
-    fi
+    # Clean old configs
+    rm -f "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.old"
 
-    # Lanjutkan dengan merge seperti biasa
-    IFS=' ' read -r -a defconfigs <<< "$DEVICE_DEFCONFIG"
-    local main_defconfig="${defconfigs[0]}"
-    local extra_defconfig="${defconfigs[1]}"
+    IFS=' ' read -r -a defconfig_array <<< "$DEVICE_DEFCONFIG"
+    local primary="${defconfig_array[0]}"
+    local fragments=("${defconfig_array[@]:1}")
 
-    if [[ ${#defconfigs[@]} -eq 1 ]]; then
-        make "$BUILD_OPTIONS" ARCH="$ARCH" "$main_defconfig" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1
-    else
-        if [[ ! -f "scripts/kconfig/merge_config.sh" ]]; then
-            log_error "merge_config.sh not found"
-            return 1
+    log_info "Primary defconfig: $primary"
+    make -j"$NUM_CORES" ARCH=arm64 "$primary" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
+        log_error "Primary defconfig failed."
+        return 1
+    }
+
+    # Merge fragments
+    for frag in "${fragments[@]}"; do
+        local frag_path="arch/arm64/configs/$frag"
+        if [[ -f "$frag_path" ]]; then
+            log_info "Merging $frag..."
+            scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$KERNEL_OUTDIR/.config" "$frag_path" || {
+                log_error "Failed to merge $frag."
+                return 1
+            }
+        else
+            log_warning "Fragment $frag not found, skipping."
         fi
-        if [[ ! -f "$extra_defconfig" ]]; then
-            log_error "Extra defconfig '$extra_defconfig' not found"
+    done
+
+    # Update config after merges
+    if [[ ${#fragments[@]} -gt 0 ]]; then
+        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
+            log_error "Failed to update defconfig after merge."
             return 1
-        fi
-        scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$main_defconfig" "$extra_defconfig"
-        make "$BUILD_OPTIONS" ARCH="$ARCH" olddefconfig O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1
+        }
     fi
 }
 
