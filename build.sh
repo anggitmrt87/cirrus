@@ -278,10 +278,32 @@ configure_defconfig() {
     cd "$KERNEL_ROOTDIR"
     log_step "Configuring defconfig..."
 
-    make "$BUILD_OPTIONS" ARCH="$ARCH" "$DEVICE_DEFCONFIG" O="$KERNEL_OUTDIR" all LLVM=1 LLVM_IAS=1 || {
-        log_error "Configuring defconfig failed."
-        return 1
-    }
+    # Pisahkan DEVICE_DEFCONFIG menjadi array
+    IFS=' ' read -r -a defconfigs <<< "$DEVICE_DEFCONFIG"
+    local main_defconfig="${defconfigs[0]}"
+    local extra_defconfig="${defconfigs[1]}"
+
+    if [[ ${#defconfigs[@]} -eq 1 ]]; then
+        # Hanya satu defconfig, langsung jalankan make
+        make "$BUILD_OPTIONS" ARCH="$ARCH" "$main_defconfig" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1
+    else
+        # Lebih dari satu: gunakan merge_config.sh
+        if [[ ! -f "scripts/kconfig/merge_config.sh" ]]; then
+            log_error "merge_config.sh not found, cannot merge defconfigs"
+            return 1
+        fi
+        # Pastikan file extra ada
+        if [[ ! -f "$extra_defconfig" ]]; then
+            log_error "Extra defconfig '$extra_defconfig' not found in kernel root"
+            return 1
+        fi
+        # Jalankan merge
+        scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$main_defconfig" "$extra_defconfig"
+        # Salin hasil ke .config
+        cp "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.merged"
+        # Lanjutkan olddefconfig untuk resolusi dependensi
+        make "$BUILD_OPTIONS" ARCH="$ARCH" olddefconfig O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1
+    fi
 }
 
 compile_kernel() {
@@ -292,7 +314,7 @@ compile_kernel() {
     local targets=("$TYPE_IMAGE")
     [[ "${BUILD_DTBO:-false}" == "true" ]] && targets+=("dtbo.img")
 
-    if ! make "$BUILD_OPTIONS" ARCH="$ARCH" "$DEVICE_DEFCONFIG" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 "${targets[@]}" all CROSS_COMPILE="$BUILD_CROSS_COMPILE" CROSS_COMPILE_ARM32="$BUILD_CROSS_COMPILE_ARM32" CLANG_TRIPLE="$BUILD_CLANG_TRIPLE"; then
+    if ! make "$BUILD_OPTIONS" ARCH="$ARCH" "$DEVICE_DEFCONFIG" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 "${targets[@]}" CROSS_COMPILE="$BUILD_CROSS_COMPILE" CROSS_COMPILE_ARM32="$BUILD_CROSS_COMPILE_ARM32" CLANG_TRIPLE="$BUILD_CLANG_TRIPLE"; then
         log_error "Kernel compilation failed."
         return 1
     fi
