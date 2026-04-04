@@ -12,6 +12,7 @@ env:
   DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/kernelsu.config"
   ANYKERNEL: "https://github.com/anggitmrt87/AnyKernel3.git"
   ANYKERNEL_BRANCH: "master"
+  ARCH: "arm64"
   
   # 🔐 Telegram Encrypted Secrets
   TG_TOKEN: "ENCRYPTED[d9185ab32fea60b59b9caac7865c156001691d0c6c87c825c32a3db288ed566a8ac07cfe7ff445fb2c0e61f57c06b486]"

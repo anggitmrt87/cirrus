@@ -120,6 +120,14 @@ setup_toolchain() {
             exit 1
         fi
         export PATH="$GCC32_ROOTDIR/bin:$GCC64_ROOTDIR/bin:$PATH"
+        export BUILD_CROSS_COMPILE="aarch64-linux-android-"
+        export BUILD_CROSS_COMPILE_ARM32="arm-linux-androideabi-"
+    fi
+    
+    if [[ "${ARCH:-}" == "arm64" ]]; then
+        export BUILD_CLANG_TRIPLE="aarch64-linux-gnu-"
+    elif [[ "${ARCH:-}" == "arm" ]]; then
+        export BUILD_CLANG_TRIPLE="arm-linux-gnueabi-"
     fi
 
     export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib"
@@ -270,40 +278,10 @@ configure_defconfig() {
     cd "$KERNEL_ROOTDIR"
     log_step "Configuring defconfig..."
 
-    # Clean old configs
-    rm -f "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.old"
-
-    IFS=' ' read -r -a defconfig_array <<< "$DEVICE_DEFCONFIG"
-    local primary="${defconfig_array[0]}"
-    local fragments=("${defconfig_array[@]:1}")
-
-    log_info "Primary defconfig: $primary"
-    make -j"$NUM_CORES" ARCH=arm64 "$primary" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
-        log_error "Primary defconfig failed."
+    make -j"$NUM_CORES" ARCH=arm64 $DEVICE_DEFCONFIG O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
+        log_error "Configuring defconfig failed."
         return 1
     }
-
-    # Merge fragments
-    for frag in "${fragments[@]}"; do
-        local frag_path="arch/arm64/configs/$frag"
-        if [[ -f "$frag_path" ]]; then
-            log_info "Merging $frag..."
-            scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$KERNEL_OUTDIR/.config" "$frag_path" || {
-                log_error "Failed to merge $frag."
-                return 1
-            }
-        else
-            log_warning "Fragment $frag not found, skipping."
-        fi
-    done
-
-    # Update config after merges
-    if [[ ${#fragments[@]} -gt 0 ]]; then
-        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
-            log_error "Failed to update defconfig after merge."
-            return 1
-        }
-    fi
 }
 
 compile_kernel() {
@@ -314,7 +292,7 @@ compile_kernel() {
     local targets=("$TYPE_IMAGE")
     [[ "${BUILD_DTBO:-false}" == "true" ]] && targets+=("dtbo.img")
 
-    if ! make "$BUILD_OPTIONS" ARCH=arm64 O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 "${targets[@]}"; then
+    if ! make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 "${targets[@]}" CROSS_COMPILE="$BUILD_CROSS_COMPILE" CROSS_COMPILE_ARM32="$BUILD_CROSS_COMPILE_ARM32" CLANG_TRIPLE="$BUILD_CLANG_TRIPLE"; then
         log_error "Kernel compilation failed."
         return 1
     fi
