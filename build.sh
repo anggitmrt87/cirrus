@@ -286,14 +286,14 @@ configure_defconfig() {
     local fragments=("${defconfig_array[@]:1}")
 
     log_info "Primary defconfig: $primary"
-    make -j"$NUM_CORES" ARCH=arm64 "$primary" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
+    make "$BUILD_OPTIONS" ARCH="$ARCH" "$primary" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
         log_error "Primary defconfig failed."
         return 1
     }
 
     # Merge fragments
     for frag in "${fragments[@]}"; do
-        local frag_path="arch/arm64/configs/$frag"
+        local frag_path="arch/$ARCH/configs/$frag"
         if [[ -f "$frag_path" ]]; then
             log_info "Merging $frag..."
             scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$KERNEL_OUTDIR/.config" "$frag_path" || {
@@ -312,6 +312,8 @@ configure_defconfig() {
             return 1
         }
     fi
+    
+    make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 savedefconfig
 }
 
 compile_kernel() {
@@ -322,7 +324,7 @@ compile_kernel() {
     local targets=("$TYPE_IMAGE")
     [[ "${BUILD_DTBO:-false}" == "true" ]] && targets+=("dtbo.img")
 
-    if ! make "$BUILD_OPTIONS" ARCH="$ARCH" "$DEVICE_DEFCONFIG" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 "${targets[@]}" CROSS_COMPILE="$BUILD_CROSS_COMPILE" CROSS_COMPILE_ARM32="$BUILD_CROSS_COMPILE_ARM32" CLANG_TRIPLE="$BUILD_CLANG_TRIPLE"; then
+    if ! make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 "${targets[@]}" CROSS_COMPILE="$BUILD_CROSS_COMPILE" CROSS_COMPILE_ARM32="$BUILD_CROSS_COMPILE_ARM32" CLANG_TRIPLE="$BUILD_CLANG_TRIPLE"; then
         log_error "Kernel compilation failed."
         return 1
     fi
