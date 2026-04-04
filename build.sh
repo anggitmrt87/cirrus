@@ -59,7 +59,7 @@ check_dependencies() {
 validate_environment() {
     log_step "Validating environment variables..."
     local required_vars=(
-        "DEVICE_CODENAME" "TG_TOKEN" "TG_CHAT_ID" "BUILD_USER" "BUILD_HOST" "ANYKERNEL" "ANYKERNEL_BRANCH" "KERNEL_SOURCE" "KERNEL_BRANCH"
+        "DEVICE_CODENAME" "TG_TOKEN" "TG_CHAT_ID" "BUILD_USER" "BUILD_HOST" "ANYKERNEL" "ANYKERNEL_BRANCH" "KERNEL_SOURCE" "KERNEL_BRANCH" "ARCH"
     )
     [[ "${KPM_PATCH:-false}" == "true" ]] && required_vars+=("KPM_VERSION")
 
@@ -278,30 +278,30 @@ configure_defconfig() {
     cd "$KERNEL_ROOTDIR"
     log_step "Configuring defconfig..."
 
-    # Pisahkan DEVICE_DEFCONFIG menjadi array
+    # Pastikan file kernelsu.config bisa diakses dari root
+    if [[ -f "arch/arm64/configs/vendor/kernelsu.config" && ! -f "vendor/kernelsu.config" ]]; then
+        log_info "Creating symlink for kernelsu.config at root/vendor/"
+        mkdir -p vendor
+        ln -sf "../arch/arm64/configs/vendor/kernelsu.config" "vendor/kernelsu.config"
+    fi
+
+    # Lanjutkan dengan merge seperti biasa
     IFS=' ' read -r -a defconfigs <<< "$DEVICE_DEFCONFIG"
     local main_defconfig="${defconfigs[0]}"
     local extra_defconfig="${defconfigs[1]}"
 
     if [[ ${#defconfigs[@]} -eq 1 ]]; then
-        # Hanya satu defconfig, langsung jalankan make
         make "$BUILD_OPTIONS" ARCH="$ARCH" "$main_defconfig" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1
     else
-        # Lebih dari satu: gunakan merge_config.sh
         if [[ ! -f "scripts/kconfig/merge_config.sh" ]]; then
-            log_error "merge_config.sh not found, cannot merge defconfigs"
+            log_error "merge_config.sh not found"
             return 1
         fi
-        # Pastikan file extra ada
         if [[ ! -f "$extra_defconfig" ]]; then
-            log_error "Extra defconfig '$extra_defconfig' not found in kernel root"
+            log_error "Extra defconfig '$extra_defconfig' not found"
             return 1
         fi
-        # Jalankan merge
         scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$main_defconfig" "$extra_defconfig"
-        # Salin hasil ke .config
-        cp "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.merged"
-        # Lanjutkan olddefconfig untuk resolusi dependensi
         make "$BUILD_OPTIONS" ARCH="$ARCH" olddefconfig O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1
     fi
 }
