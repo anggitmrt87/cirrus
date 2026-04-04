@@ -23,7 +23,7 @@ env:
   CLANG_ROOTDIR: "$CIRRUS_WORKING_DIR/clang"
   GCC32_ROOTDIR: "$CIRRUS_WORKING_DIR/gcc32"
   GCC64_ROOTDIR: "$CIRRUS_WORKING_DIR/gcc64"
-  AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/9b144befdfd93b90e02c663504fb9f4b95f9faf8/clang-r596125.tar.gz
+  AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/9b144befdfd93b90e02c663504fb9f4b95f9faf8/clang-r596125.tar.gz"
 
   # 🔧 Kernel Build Configuration
   TYPE_IMAGE: "Image.gz"
