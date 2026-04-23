@@ -41,7 +41,7 @@ env:
 
   # 🚀 Build Optimization
   BUILD_OPTIONS: "-j8"
-  CCACHE: "true"
+  CCACHE: "false"
   CCACHE_DIR: "/tmp/ccache"
   CCACHE_MAXSIZE: "10G"
   
