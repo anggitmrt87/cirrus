@@ -9,7 +9,7 @@ env:
   BUILD_HOST: "mrtproject™"
   KERNEL_SOURCE: "https://github.com/liliumproject/kernel_xiaomi_chime"
   KERNEL_BRANCH: "rebase"
-  DEVICE_DEFCONFIG: "vendor/chime-stock_defconfig vendor/xiaomi/chime.config"
+  DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/chime.config vendor/xiaomi/lime.config"
   ANYKERNEL: "https://github.com/anggitmrt87/AnyKernel3.git"
   ANYKERNEL_BRANCH: "master"
   ARCH: "arm64"
