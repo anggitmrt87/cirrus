@@ -462,17 +462,11 @@ create_and_upload_zip() {
     local caption=$(generate_caption "$zip_name" "$zip_size" "$zip_sha256" "$zip_md5" "$zip_sha1")
 
     log_step "Uploading to Telegram..."
-    if curl -F document=@"$zip_name" -F filename="$zip_name" "$BOT_DOC_URL" \
+    curl -F document=@"$zip_name" -F filename="$zip_name" "$BOT_DOC_URL" \
         -F chat_id="$TG_CHAT_ID" \
         -F "disable_web_page_preview=true" \
         -F "parse_mode=html" \
-        -F caption="$caption" >/dev/null; then
-        log_success "Build uploaded successfully."
-        BUILD_STATUS="success"
-    else
-        log_error "Upload failed."
-        return 1
-    fi
+        -F caption="$caption" >/dev/null && log_success "Build uploaded successfully." && BUILD_STATUS="success" || log_warning "Failed to send kernel." && BUILD_STATUS="failed"
 }
 
 send_config() {
@@ -481,7 +475,7 @@ send_config() {
 
     local config_size=$(du -h "$config_file" | cut -f1)
     local config_name="config-${DEVICE_CODENAME}-${DATE}.txt"
-    local caption="⚙️ <b>Kernel Config for $DEVICE_CODENAME</b>
+    local captionconfig="⚙️ <b>Kernel Config for $DEVICE_CODENAME</b>
 📅 Date: $(date +'%Y-%m-%d %H:%M:%S')
 📏 Size: $config_size
 🔧 Compiler: $KBUILD_COMPILER_STRING
@@ -492,7 +486,7 @@ send_config() {
         -F chat_id="$TG_CHAT_ID" \
         -F "disable_web_page_preview=true" \
         -F "parse_mode=html" \
-        -F caption="$caption" >/dev/null && log_success "Config sent." || log_warning "Failed to send config."
+        -F caption="$captionconfig" >/dev/null && log_success "Config sent." || log_warning "Failed to send config."
 }
 
 # ------------------------------------------------------------------------------
