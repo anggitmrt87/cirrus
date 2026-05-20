@@ -122,6 +122,12 @@ setup_toolchain() {
         export PATH="$GCC32_ROOTDIR/bin:$GCC64_ROOTDIR/bin:$PATH"
         export BUILD_CROSS_COMPILE="aarch64-linux-android-"
         export BUILD_CROSS_COMPILE_ARM32="arm-linux-androideabi-"
+        export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32 CLANG_TRIPLE=$BUILD_CLANG_TRIPLE"
+    # Add GF toolchains for build
+    elif [[ "${USE_CLANG:-}" == "greenforce" ]]; then
+        export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
+        export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+        export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
     fi
     
     if [[ "${ARCH:-}" == "arm64" ]]; then
@@ -286,7 +292,7 @@ configure_defconfig() {
     local fragments=("${defconfig_array[@]:1}")
 
     log_info "Primary defconfig: $primary"
-    make "$BUILD_OPTIONS" ARCH="$ARCH" "$primary" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
+    make "$BUILD_OPTIONS" ARCH="$ARCH" "$primary" O="$KERNEL_OUTDIR" $COMPILER_OPTION || {
         log_error "Primary defconfig failed."
         return 1
     }
@@ -307,13 +313,13 @@ configure_defconfig() {
 
     # Update config after merges
     if [[ ${#fragments[@]} -gt 0 ]]; then
-        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 || {
+        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION || {
             log_error "Failed to update defconfig after merge."
             return 1
         }
     fi
     
-    make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 savedefconfig
+    make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" $COMPILER_OPTION savedefconfig
 }
 
 compile_kernel() {
@@ -324,7 +330,7 @@ compile_kernel() {
     local targets=("$TYPE_IMAGE")
     [[ "${BUILD_DTBO:-false}" == "true" ]] && targets+=("dtbo.img")
 
-    if ! make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" LLVM=1 LLVM_IAS=1 "${targets[@]}" CROSS_COMPILE="$BUILD_CROSS_COMPILE" CROSS_COMPILE_ARM32="$BUILD_CROSS_COMPILE_ARM32" CLANG_TRIPLE="$BUILD_CLANG_TRIPLE"; then
+    if ! make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" $COMPILER_OPTION "${targets[@]}"; then
         log_error "Kernel compilation failed."
         return 1
     fi
@@ -462,11 +468,15 @@ create_and_upload_zip() {
     local caption=$(generate_caption "$zip_name" "$zip_size" "$zip_sha256" "$zip_md5" "$zip_sha1")
 
     log_step "Uploading to Telegram..."
-    curl -F document=@"$zip_name" -F filename="$zip_name" "$BOT_DOC_URL" \
+    if curl -F document=@"$zip_name" -F filename="$zip_name" "$BOT_DOC_URL" \
         -F chat_id="$TG_CHAT_ID" \
         -F "disable_web_page_preview=true" \
         -F "parse_mode=html" \
-        -F caption="$caption" >/dev/null && log_success "Build uploaded successfully." && BUILD_STATUS="success" || log_warning "Failed to send kernel." && BUILD_STATUS="failed"
+        -F caption="$caption" >/dev/null; then
+        log_success "Build uploaded successfully."
+    else
+        log_warning "Failed to send kernel."
+    fi
 }
 
 send_config() {
@@ -529,6 +539,7 @@ main() {
     configure_defconfig || exit 1
     install_kernelsu
     compile_kernel || exit 1
+    BUILD_STATUS="success"
     patch_kpm
     prepare_anykernel || exit 1
     collect_build_info
