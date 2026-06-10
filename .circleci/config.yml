@@ -1,0 +1,103 @@
+# .circleci/config.yml
+version: 2.1
+
+jobs:
+  build:
+    docker:
+      - image: mhmmdfdlyas/dockerfile:k-ubuntu
+    resource_class: xlarge
+    environment:
+      # Timezone & Locale
+      TZ: "Asia/Jakarta"
+      LANG: "C.UTF-8"
+      LC_ALL: "C"
+      
+      # Kernel Configuration
+      DEVICE_CODENAME: "chime"
+      BUILD_USER: "builder"
+      BUILD_HOST: "mrtproject™"
+      KERNEL_SOURCE: "https://github.com/anggitmrt87/kernel_xiaomi_citrus_sm6115.git"
+      KERNEL_BRANCH: "13.0.0-perf"
+      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/chime.config vendor/xiaomi/lime.config vendor/kernelsu.config"
+      ANYKERNEL: "https://github.com/anggitmrt87/AnyKernel3.git"
+      ANYKERNEL_BRANCH: "master"
+      ARCH: "arm64"
+      
+      # Telegram (contents of CircleCI project environment variables)
+      # TG_TOKEN and TG_CHAT_ID will be taken from the environment
+      
+      # Toolchain Configuration
+      USE_CLANG: "greenforce"
+      # Path absolut disesuaikan dengan working directory CircleCI
+      CIRRUS_WORKING_DIR: "/home/circleci/project"
+      CLANG_ROOTDIR: "/home/circleci/project/clang"
+      GCC32_ROOTDIR: "/home/circleci/project/gcc32"
+      GCC64_ROOTDIR: "/home/circleci/project/gcc64"
+      AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/9b144befdfd93b90e02c663504fb9f4b95f9faf8/clang-r596125.tar.gz"
+      
+      # Kernel Build
+      TYPE_IMAGE: "Image.gz"
+      BUILD_DTBO: "true"
+      DISABLE_LOCALVERSION_ST: "true"
+      INCLUDE_DTB: "true"
+      DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
+      
+      # KernelSU
+      KERNELSU: "true"
+      KERNELSU_TYPE: "rksu"
+      KERNELSU_BRANCH: "main"
+      KPM_PATCH: "false"
+      KPM_VERSION: "0.13.0"
+      
+      # Build Optimization
+      BUILD_OPTIONS: "-j8"
+      CCACHE: "false"
+      CCACHE_DIR: "/tmp/ccache"
+      CCACHE_MAXSIZE: "10G"
+      
+      # Logging
+      DEBUG_MODE: "false"
+      KEEP_BUILD_LOGS: "false"
+    
+    steps:
+      - checkout
+      
+      - restore_cache:
+          keys:
+            - ccache-{{ checksum "build.sh" }}-{{ .Branch }}
+            - ccache-{{ checksum "build.sh" }}
+            - ccache-
+      
+      - run:
+          name: "🔄 Update System & Install Dependencies"
+          command: |
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo6
+            echo 'en_US.UTF-8 UTF-8' | sudo tee /etc/locale.gen && sudo /usr/sbin/locale-gen
+            sudo ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" | sudo tee /etc/timezone
+            sudo apt-get clean
+      
+      - run:
+          name: "📥 Download Kernel & Toolchain"
+          command: |
+            chmod +x download.sh
+            ./download.sh
+          no_output_timeout: 1h
+      
+      - run:
+          name: "🔨 Build Kernel"
+          command: |
+            chmod +x build.sh
+            ./build.sh
+          no_output_timeout: 3h
+      
+      - save_cache:
+          key: ccache-{{ checksum "build.sh" }}-{{ .Branch }}
+          paths:
+            - /tmp/ccache
+
+workflows:
+  version: 2
+  kernel_build:
+    jobs:
+      - build
