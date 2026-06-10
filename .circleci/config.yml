@@ -5,7 +5,7 @@ jobs:
   build:
     docker:
       - image: mhmmdfdlyas/dockerfile:k-ubuntu
-    resource_class: xlarge
+    resource_class: large
     environment:
       # Timezone & Locale
       TZ: "Asia/Jakarta"
