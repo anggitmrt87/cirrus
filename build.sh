@@ -122,18 +122,17 @@ setup_toolchain() {
         export PATH="$GCC32_ROOTDIR/bin:$GCC64_ROOTDIR/bin:$PATH"
         export BUILD_CROSS_COMPILE="aarch64-linux-android-"
         export BUILD_CROSS_COMPILE_ARM32="arm-linux-androideabi-"
+        if [[ "${ARCH:-}" == "arm64" ]]; then
+            export BUILD_CLANG_TRIPLE="aarch64-linux-gnu-"
+        elif [[ "${ARCH:-}" == "arm" ]]; then
+            export BUILD_CLANG_TRIPLE="arm-linux-gnueabi-"
+        fi
         export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32 CLANG_TRIPLE=$BUILD_CLANG_TRIPLE"
     # Add GF toolchains for build
     elif [[ "${USE_CLANG:-}" == "greenforce" ]]; then
         export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
         export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
         export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
-    fi
-    
-    if [[ "${ARCH:-}" == "arm64" ]]; then
-        export BUILD_CLANG_TRIPLE="aarch64-linux-gnu-"
-    elif [[ "${ARCH:-}" == "arm" ]]; then
-        export BUILD_CLANG_TRIPLE="arm-linux-gnueabi-"
     fi
 
     export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib"
