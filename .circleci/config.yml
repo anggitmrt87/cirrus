@@ -71,6 +71,8 @@ jobs:
       - run:
           name: "🔄 Update System & Install Dependencies"
           command: |
+            apt-get update -qq
+            apt-get install sudo
             sudo apt-get update -qq
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo6
             echo 'en_US.UTF-8 UTF-8' | sudo tee /etc/locale.gen && sudo /usr/sbin/locale-gen
