@@ -26,8 +26,8 @@ jobs:
       # Telegram (contents of CircleCI project environment variables)
       # TG_TOKEN and TG_CHAT_ID will be taken from the environment
       
-      # Toolchain Configuration
-      USE_CLANG: "aosp"
+      # Toolchain Configuration (aosp | greenforce)
+      USE_CLANG: "greenforce"
       # Path absolut disesuaikan dengan working directory CircleCI
       CIRRUS_WORKING_DIR: "/home/circleci/project"
       CLANG_ROOTDIR: "/home/circleci/project/clang"
