@@ -459,22 +459,42 @@ create_and_upload_zip() {
         return 1
     fi
 
+    local zip_size=$(du -h "$zip_name" | cut -f1)
+    local zip_size_bytes=$(stat -c%s "$zip_name" 2>/dev/null || stat -f%z "$zip_name" 2>/dev/null)
+    local max_size=$((50 * 1024 * 1024))
+    if [[ $zip_size_bytes -gt $max_size ]]; then
+        log_error "ZIP size ($zip_size) exceeds Telegram limit (50 MB). Upload skipped."
+        return 1
+    fi
+
     local zip_sha1=$(sha1sum "$zip_name" | cut -d' ' -f1)
     local zip_md5=$(md5sum "$zip_name" | cut -d' ' -f1)
     local zip_sha256=$(sha256sum "$zip_name" | cut -d' ' -f1)
-    local zip_size=$(du -h "$zip_name" | cut -f1)
 
     local caption=$(generate_caption "$zip_name" "$zip_size" "$zip_sha256" "$zip_md5" "$zip_sha1")
 
     log_step "Uploading to Telegram..."
-    if curl -F document=@"$zip_name" -F filename="$zip_name" "$BOT_DOC_URL" \
-        -F chat_id="$TG_CHAT_ID" \
-        -F "disable_web_page_preview=true" \
-        -F "parse_mode=html" \
-        -F caption="$caption" >/dev/null; then
+    local upload_success=false
+    for i in {1..3}; do
+        if curl -F document=@"$zip_name" -F filename="$zip_name" "$BOT_DOC_URL" \
+             -F chat_id="$TG_CHAT_ID" \
+             -F "disable_web_page_preview=true" \
+             -F "parse_mode=html" \
+             -F caption="$caption" \
+             --fail --show-error --max-time 600; then
+            upload_success=true
+            break
+        else
+            log_warning "Upload attempt $i failed. Retrying in 5s..."
+            sleep 5
+        fi
+    done
+
+    if $upload_success; then
         log_success "Build uploaded successfully."
     else
-        log_warning "Failed to send kernel."
+        log_error "Upload failed after 3 attempts."
+        return 1
     fi
 }
 
