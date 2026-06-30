@@ -584,8 +584,8 @@ main() {
     # Build steps
     tg_post_msg "🚀 <b>Kernel Build Started!</b>%0A%0A📱 Device: <code>$DEVICE_CODENAME</code>%0A⚙️ Defconfig: <code>$DEVICE_DEFCONFIG</code>%0A🔧 Toolchain: <code>$KBUILD_COMPILER_STRING</code>"
 
-    configure_defconfig || exit 1
     install_kernelsu
+    configure_defconfig || exit 1
     # =============== FIX ===============
     # Re-run olddefconfig to absorb any new Kconfig symbols from KernelSU
     make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
