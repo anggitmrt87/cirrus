@@ -328,7 +328,6 @@ configure_defconfig() {
         # Use scripts/config if available, otherwise use sed (fallback)
         if [[ -f "scripts/config" ]]; then
             scripts/config --file "$KERNEL_OUTDIR/.config" --disable LOCALVERSION_AUTO
-            scripts/config --file "$KERNEL_OUTDIR/.config" --set-str LOCALVERSION ""
         else
             log_warning "scripts/config tidak ditemukan, menggunakan sed langsung"
             sed -i 's/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/g' "$KERNEL_OUTDIR/.config"
