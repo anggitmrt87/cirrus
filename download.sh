@@ -96,15 +96,27 @@ case "$USE_CLANG" in
         verify_download "$TEMP_DIR/$local_archive_name"
         echo -e "${CYAN}📁 Extracting AOSP toolchain...${NC}"
         tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract AOSP toolchain"
-        git clone --depth=1 --recurse-submodules --shallow-submodules https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git -b android-msm-redbull-4.19-android14-qpr3 $GCC64_ROOTDIR
-        git clone --depth=1 --recurse-submodules --shallow-submodules https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git -b android-msm-redbull-4.19-android14-qpr3 $GCC32_ROOTDIR
+        
+        # Clone GCC toolchains (required for AOSP)
+        log_info "Cloning GCC64 toolchain..."
+        git clone --depth=1 --recurse-submodules --shallow-submodules \
+            https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git \
+            -b android-msm-redbull-4.19-android14-qpr3 "$GCC64_ROOTDIR" \
+            || handle_error "Gagal clone GCC64"
+        
+        log_info "Cloning GCC32 toolchain..."
+        git clone --depth=1 --recurse-submodules --shallow-submodules \
+            https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git \
+            -b android-msm-redbull-4.19-android14-qpr3 "$GCC32_ROOTDIR" \
+            || handle_error "Gagal clone GCC32"
         ;;
     
     "greenforce")
         local_archive_name="greenforce-clang.tar.gz"
         log_info "Using Greenforce Clang toolchain ⚡"
+        # Fix: use eval to run the script
         GREENFORCE_SCRIPT=$(curl -sL --fail https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_latest_url.sh) || handle_error "Gagal mengambil script Greenforce"
-        source /dev/stdin <<< "$GREENFORCE_SCRIPT"
+        eval "$GREENFORCE_SCRIPT" || handle_error "Gagal mengeksekusi script Greenforce"
         if [[ -z "$LATEST_URL" ]]; then
             handle_error "LATEST_URL tidak ditemukan dari script Greenforce"
         fi
@@ -116,7 +128,6 @@ case "$USE_CLANG" in
     
     "neutron")
         log_info "Using Neutron Clang toolchain 🧠"
-        # Pastikan jq tersedia
         if ! command -v jq &> /dev/null; then
             handle_error "jq tidak ditemukan. Pastikan sudah diinstall."
         fi
@@ -137,7 +148,7 @@ case "$USE_CLANG" in
         echo -e "${CYAN}📁 Extracting Neutron toolchain (zstd)...${NC}"
         tar -I zstd -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract Neutron toolchain"
         
-        # Jika arsip berisi subdirektori (misal neutron-clang-<date>), pindahkan isinya ke root $CLANG_ROOTDIR
+        # If the archive contains subdirectories (e.g. neutron-clang-<date>), move their contents to the root $CLANG_ROOTDIR
         cd "$CLANG_ROOTDIR"
         extracted_dir=$(find . -maxdepth 1 -type d -name "neutron-clang-*" | head -1)
         if [[ -n "$extracted_dir" && "$extracted_dir" != "." ]]; then
@@ -148,7 +159,7 @@ case "$USE_CLANG" in
             shopt -u dotglob
         fi
         
-        # Verifikasi keberadaan clang
+        # Verify the existence of clang
         if [[ ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
             handle_error "Neutron Clang binary not found after extraction"
         fi

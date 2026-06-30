@@ -16,6 +16,7 @@ jobs:
       DEVICE_CODENAME: "chime"
       BUILD_USER: "builder"
       BUILD_HOST: "mrtproject™"
+      KERNEL_NAME: "mrt-kernel"
       KERNEL_SOURCE: "https://github.com/anggitmrt87/kernel_xiaomi_citrus_sm6115.git"
       KERNEL_BRANCH: "13.0.0-perf"
       DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig xiaomi/chime.config xiaomi/lime.config vendor/kernelsu.config"
@@ -27,8 +28,8 @@ jobs:
       # TG_TOKEN and TG_CHAT_ID will be taken from the environment
       
       # Toolchain Configuration (aosp | greenforce | neutron)
-      USE_CLANG: "aosp"
-      # Path absolut disesuaikan dengan working directory CircleCI
+      USE_CLANG: "neutron"
+      # The absolute path is adjusted to the CircleCI working directory.
       CIRRUS_WORKING_DIR: "/home/circleci/project"
       CLANG_ROOTDIR: "/home/circleci/project/clang"
       GCC32_ROOTDIR: "/home/circleci/project/gcc32"

@@ -32,7 +32,7 @@ log_progress(){ echo -e "${MAGENTA}📊 [PROGRESS]${NC} $1"; }
 # ------------------------------------------------------------------------------
 # 🌟 Global variables (will be set during runtime)
 # ------------------------------------------------------------------------------
-declare -g KERNEL_NAME="mrt-kernel"
+KERNEL_NAME="${KERNEL_NAME:-mrt-kernel}"
 declare -g START_TIME
 declare -g BUILD_STATUS="failed"
 declare -g BUILD_LOG="${CIRRUS_WORKING_DIR:-.}/build.log"
@@ -113,7 +113,29 @@ setup_toolchain() {
         export PATH="$CLANG_ROOTDIR/bin:${PATH}"
     fi
     
-    export COMPILER_OPTION="LLVM=1 LLVM_IAS=1"
+    # Add GCC toolchains for AOSP builds if needed
+    if [[ "${USE_CLANG:-}" == "aosp" ]]; then
+        if [[ ! -d "$GCC32_ROOTDIR" || ! -d "$GCC64_ROOTDIR" ]]; then
+            log_error "GCC toolchains missing for AOSP build"
+            exit 1
+        fi
+        export PATH="$GCC32_ROOTDIR/bin:$GCC64_ROOTDIR/bin:$PATH"
+        export BUILD_CROSS_COMPILE="aarch64-linux-android-"
+        export BUILD_CROSS_COMPILE_ARM32="arm-linux-androideabi-"
+        if [[ "${ARCH:-}" == "arm64" ]]; then
+            export BUILD_CLANG_TRIPLE="aarch64-linux-gnu-"
+        elif [[ "${ARCH:-}" == "arm" ]]; then
+            export BUILD_CLANG_TRIPLE="arm-linux-gnueabi-"
+        fi
+        export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32 CLANG_TRIPLE=$BUILD_CLANG_TRIPLE"
+    # Non aosp clang
+    else
+        export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
+        export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+        export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
+    fi
+
+    export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib"
 }
 
 setup_build_vars() {
@@ -297,6 +319,26 @@ configure_defconfig() {
     fi
     
     make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" $COMPILER_OPTION savedefconfig
+
+    # ----------------------------------------------------------------------
+    # 🔧 DISABLE_LOCALVERSION_ST if activated
+    # ----------------------------------------------------------------------
+    if [[ "${DISABLE_LOCALVERSION_ST:-false}" == "true" ]]; then
+        log_info "Menonaktifkan LOCALVERSION_AUTO dan membersihkan LOCALVERSION"
+        # Use scripts/config if available, otherwise use sed (fallback)
+        if [[ -f "scripts/config" ]]; then
+            scripts/config --file "$KERNEL_OUTDIR/.config" --disable LOCALVERSION_AUTO
+            scripts/config --file "$KERNEL_OUTDIR/.config" --set-str LOCALVERSION ""
+        else
+            log_warning "scripts/config tidak ditemukan, menggunakan sed langsung"
+            sed -i 's/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/g' "$KERNEL_OUTDIR/.config"
+            sed -i '/CONFIG_LOCALVERSION=""/d' "$KERNEL_OUTDIR/.config"
+            echo 'CONFIG_LOCALVERSION=""' >> "$KERNEL_OUTDIR/.config"
+        fi
+        # Run olddefconfig for the changes to take effect.
+        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
+        log_success "LOCALVERSION_AUTO dinonaktifkan."
+    fi
 }
 
 compile_kernel() {
@@ -316,6 +358,12 @@ compile_kernel() {
     if [[ ! -f "$IMAGE" ]]; then
         log_error "Kernel image not found at $IMAGE."
         return 1
+    fi
+
+    # Check dtbo if requested
+    if [[ "${BUILD_DTBO:-false}" == "true" && ! -f "$DTBO" ]]; then
+        log_warning "dtbo.img tidak terbentuk, lanjutkan tanpa dtbo."
+        BUILD_DTBO=false
     fi
 
     log_success "Kernel compilation successful."
@@ -341,7 +389,11 @@ prepare_anykernel() {
     fi
 
     if [[ "${INCLUDE_DTB:-false}" == "true" ]]; then
-        cp -f "$DTB" dtb || { log_error "Failed to copy DTB"; return 1; }
+        if [[ -f "$DTB" ]]; then
+            cp -f "$DTB" dtb || { log_error "Failed to copy DTB"; return 1; }
+        else
+            log_warning "DTB tidak ditemukan di $DTB, lewati."
+        fi
     fi
 
     log_success "AnyKernel prepared."
@@ -352,13 +404,14 @@ prepare_anykernel() {
 # ------------------------------------------------------------------------------
 collect_build_info() {
     cd "$KERNEL_ROOTDIR"
-    export KERNEL_VERSION=$(grep 'Linux/arm64' "$KERNEL_OUTDIR/.config" 2>/dev/null | cut -d' ' -f3 || echo "N/A")
+    # Take kernel release from generated file (more accurate)
+    export KERNEL_VERSION=$(cat "$KERNEL_OUTDIR/include/config/kernel.release" 2>/dev/null || echo "N/A")
     export UTS_VERSION=$(grep 'UTS_VERSION' "$KERNEL_OUTDIR/include/generated/compile.h" 2>/dev/null | cut -d'"' -f2 || echo "N/A")
     export LATEST_COMMIT=$(git log --pretty=format:'%s' -1 2>/dev/null | head -c 100 || echo "N/A")
     export COMMIT_BY=$(git log --pretty=format:'by %an' -1 2>/dev/null | head -c 50 || echo "N/A")
     export BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "N/A")
     export COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "N/A")
-    export KERNEL_SOURCE=$(echo "$KERNEL_SOURCE" | sed -E 's|https://github.com/([^/]+/[^/.]+).*|\1|i')
+    export KERNEL_SOURCE_SHORT=$(echo "$KERNEL_SOURCE" | sed -E 's|https://github.com/([^/]+/[^/.]+).*|\1|i')
 }
 
 generate_caption() {
@@ -392,8 +445,8 @@ generate_caption() {
     fi
 
     local commit_link=""
-    if [[ -n "$KERNEL_SOURCE" && -n "$COMMIT_HASH" ]]; then
-        commit_link="🔗 <a href=\"https://github.com/$KERNEL_SOURCE/commit/$COMMIT_HASH\">View Commit</a>"
+    if [[ -n "$KERNEL_SOURCE_SHORT" && -n "$COMMIT_HASH" ]]; then
+        commit_link="🔗 <a href=\"https://github.com/$KERNEL_SOURCE_SHORT/commit/$COMMIT_HASH\">View Commit</a>"
     fi
 
     cat <<EOF
