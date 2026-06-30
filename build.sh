@@ -229,6 +229,7 @@ cleanup() {
 # 🔧 Feature installation (KernelSU, KPM)
 # ------------------------------------------------------------------------------
 install_kernelsu() {
+    cd "$KERNEL_ROOTDIR"
     [[ "${KERNELSU:-false}" != "true" ]] && { log_info "KernelSU disabled, skipping."; return 0; }
 
     local url=""
