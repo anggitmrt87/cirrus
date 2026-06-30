@@ -27,7 +27,7 @@ jobs:
       # TG_TOKEN and TG_CHAT_ID will be taken from the environment
       
       # Toolchain Configuration (aosp | greenforce | neutron)
-      USE_CLANG: "neutron"
+      USE_CLANG: "aosp"
       # Path absolut disesuaikan dengan working directory CircleCI
       CIRRUS_WORKING_DIR: "/home/circleci/project"
       CLANG_ROOTDIR: "/home/circleci/project/clang"
