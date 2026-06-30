@@ -332,8 +332,6 @@ configure_defconfig() {
         else
             log_warning "scripts/config tidak ditemukan, menggunakan sed langsung"
             sed -i 's/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/g' "$KERNEL_OUTDIR/.config"
-            sed -i '/CONFIG_LOCALVERSION=""/d' "$KERNEL_OUTDIR/.config"
-            echo 'CONFIG_LOCALVERSION=""' >> "$KERNEL_OUTDIR/.config"
         fi
         # Run olddefconfig for the changes to take effect.
         make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
@@ -588,6 +586,10 @@ main() {
 
     configure_defconfig || exit 1
     install_kernelsu
+    # =============== FIX ===============
+    # Re-run olddefconfig to absorb any new Kconfig symbols from KernelSU
+    make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
+    # ===================================
     compile_kernel || exit 1
     BUILD_STATUS="success"
     patch_kpm
