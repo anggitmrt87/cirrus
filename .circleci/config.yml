@@ -26,8 +26,8 @@ jobs:
       # Telegram (contents of CircleCI project environment variables)
       # TG_TOKEN and TG_CHAT_ID will be taken from the environment
       
-      # Toolchain Configuration (aosp | greenforce)
-      USE_CLANG: "greenforce"
+      # Toolchain Configuration (aosp | greenforce | neutron)
+      USE_CLANG: "neutron"
       # Path absolut disesuaikan dengan working directory CircleCI
       CIRRUS_WORKING_DIR: "/home/circleci/project"
       CLANG_ROOTDIR: "/home/circleci/project/clang"
@@ -74,7 +74,7 @@ jobs:
             apt-get update -qq
             apt-get install sudo -y
             sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo6
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo6 jq zstd
             echo 'en_US.UTF-8 UTF-8' | sudo tee /etc/locale.gen && sudo /usr/sbin/locale-gen
             sudo ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" | sudo tee /etc/timezone
             sudo apt-get clean

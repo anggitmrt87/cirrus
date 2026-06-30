@@ -114,8 +114,49 @@ case "$USE_CLANG" in
         tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract Greenforce toolchain"
         ;;
     
+    "neutron")
+        log_info "Using Neutron Clang toolchain 🧠"
+        # Pastikan jq tersedia
+        if ! command -v jq &> /dev/null; then
+            handle_error "jq tidak ditemukan. Pastikan sudah diinstall."
+        fi
+        
+        RELEASE_API="https://api.github.com/repos/Neutron-Toolchains/clang-build-catalogue/releases/latest"
+        echo -e "${CYAN}🔍 Fetching latest release info from GitHub...${NC}"
+        
+        ASSET_URL=$(curl -sL "$RELEASE_API" | jq -r '.assets[] | select(.name | test("^neutron-clang-.*\\.tar\\.zst$")) | .browser_download_url' | head -1)
+        if [[ -z "$ASSET_URL" || "$ASSET_URL" == "null" ]]; then
+            handle_error "No neutron-clang asset found in latest release"
+        fi
+        log_info "Found asset: $ASSET_URL"
+        
+        local_archive_name="neutron-clang.tar.zst"
+        download_with_retry "$ASSET_URL" "$local_archive_name"
+        verify_download "$TEMP_DIR/$local_archive_name"
+        
+        echo -e "${CYAN}📁 Extracting Neutron toolchain (zstd)...${NC}"
+        tar -I zstd -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract Neutron toolchain"
+        
+        # Jika arsip berisi subdirektori (misal neutron-clang-<date>), pindahkan isinya ke root $CLANG_ROOTDIR
+        cd "$CLANG_ROOTDIR"
+        extracted_dir=$(find . -maxdepth 1 -type d -name "neutron-clang-*" | head -1)
+        if [[ -n "$extracted_dir" && "$extracted_dir" != "." ]]; then
+            echo -e "${CYAN}📂 Moving contents of $extracted_dir to $CLANG_ROOTDIR...${NC}"
+            shopt -s dotglob
+            mv "$extracted_dir"/* ./
+            rmdir "$extracted_dir"
+            shopt -u dotglob
+        fi
+        
+        # Verifikasi keberadaan clang
+        if [[ ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
+            handle_error "Neutron Clang binary not found after extraction"
+        fi
+        log_info "Neutron Clang extracted successfully."
+        ;;
+    
     *)
-        handle_error "Invalid USE_CLANG value: '$USE_CLANG'. Must be 'aosp' or 'greenforce'"
+        handle_error "Invalid USE_CLANG value: '$USE_CLANG'. Must be 'aosp', 'greenforce', or 'neutron'"
         ;;
 esac
 
