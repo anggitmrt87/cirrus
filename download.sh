@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-
 set -e
 
-# 🎨 Color codes
+# Color codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -26,22 +25,27 @@ log_info() {
     echo -e "${BLUE}🔧 [INFO] $1${NC}"
 }
 
-export TEMP_DIR="$CIRRUS_WORKING_DIR/tmp_downloads"
-mkdir -p "$TEMP_DIR"
+# Use a temporary directory with mktemp for safety
+TEMP_DIR=$(mktemp -d -t kernel_download_XXXXXX)
+export TEMP_DIR
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
-if ! command -v aria2c &> /dev/null; then
-    handle_error "aria2c tidak ditemukan. Pastikan sudah diinstall (apt-get install aria2)"
-fi
+# Check required tools
+for cmd in aria2c git curl; do
+    if ! command -v "$cmd" &>/dev/null; then
+        handle_error "Required command '$cmd' not found. Please install it."
+    fi
+done
 
 download_with_retry() {
     local url="$1"
     local dest_file="$2"
     local retries=3
     local attempt=1
-    
+
     echo -e "${CYAN}📥 Downloading:${NC} $url"
     echo -e "${CYAN}📁 Destination:${NC} $dest_file"
-    
+
     while [[ $attempt -le $retries ]]; do
         echo -e "${BLUE}🔄 Attempt $attempt/$retries...${NC}"
         if aria2c --check-certificate=false -x 16 -s 16 "$url" -d "$TEMP_DIR" -o "$dest_file" --console-log-level=warn; then
@@ -52,7 +56,7 @@ download_with_retry() {
         ((attempt++))
         sleep 5
     done
-    
+
     handle_error "Failed to download after $retries attempts: $url"
 }
 
@@ -71,7 +75,7 @@ if git clone --depth=1 --recurse-submodules --shallow-submodules \
     "$KERNEL_SOURCE" \
     "$CIRRUS_WORKING_DIR/$DEVICE_CODENAME" 2>&1; then
     echo -e "${GREEN}✅ Kernel sources cloned successfully! 🎉${NC}"
-    
+
     cd "$CIRRUS_WORKING_DIR/$DEVICE_CODENAME"
     if [[ ! -d ".git" ]]; then
         handle_error "Cloned directory is not a valid git repository"
@@ -81,99 +85,98 @@ else
 fi
 
 echo ""
-echo -e "${MAGENTA}🔧 Step 2: Setting up Toolchain ($USE_CLANG)...${NC}"
-mkdir -p "$CLANG_ROOTDIR"
 
-local_archive_name=""
-case "$USE_CLANG" in
-    "aosp")
-        local_archive_name="aosp-clang.tar.gz"
-        log_info "Using AOSP Clang toolchain ⚙️"
-        if ! curl --head --silent --fail "$AOSP_CLANG_URL" > /dev/null; then
-            handle_error "AOSP Clang URL tidak dapat diakses: $AOSP_CLANG_URL"
-        fi
-        download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
-        verify_download "$TEMP_DIR/$local_archive_name"
-        echo -e "${CYAN}📁 Extracting AOSP toolchain...${NC}"
-        tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract AOSP toolchain"
-        
-        # Clone GCC toolchains (required for AOSP)
-        log_info "Cloning GCC64 toolchain..."
-        git clone --depth=1 --recurse-submodules --shallow-submodules \
-            https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git \
-            -b android-msm-redbull-4.19-android14-qpr3 "$GCC64_ROOTDIR" \
-            || handle_error "Gagal clone GCC64"
-        
-        log_info "Cloning GCC32 toolchain..."
-        git clone --depth=1 --recurse-submodules --shallow-submodules \
-            https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git \
-            -b android-msm-redbull-4.19-android14-qpr3 "$GCC32_ROOTDIR" \
-            || handle_error "Gagal clone GCC32"
-        ;;
-    
-    "greenforce")
-        local_archive_name="greenforce-clang.tar.gz"
-        log_info "Using Greenforce Clang toolchain ⚡"
-        # Fix: use eval to run the script
-        GREENFORCE_SCRIPT=$(curl -sL --fail https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_latest_url.sh) || handle_error "Gagal mengambil script Greenforce"
-        eval "$GREENFORCE_SCRIPT" || handle_error "Gagal mengeksekusi script Greenforce"
-        if [[ -z "$LATEST_URL" ]]; then
-            handle_error "LATEST_URL tidak ditemukan dari script Greenforce"
-        fi
-        download_with_retry "$LATEST_URL" "$local_archive_name"
-        verify_download "$TEMP_DIR/$local_archive_name"
-        echo -e "${CYAN}📁 Extracting Greenforce toolchain...${NC}"
-        tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract Greenforce toolchain"
-        ;;
-    
-    "neutron")
-        log_info "Using Neutron Clang toolchain 🧠"
-        if ! command -v jq &> /dev/null; then
-            handle_error "jq tidak ditemukan. Pastikan sudah diinstall."
-        fi
-        
-        RELEASE_API="https://api.github.com/repos/Neutron-Toolchains/clang-build-catalogue/releases/latest"
-        echo -e "${CYAN}🔍 Fetching latest release info from GitHub...${NC}"
-        
-        ASSET_URL=$(curl -sL "$RELEASE_API" | jq -r '.assets[] | select(.name | test("^neutron-clang-.*\\.tar\\.zst$")) | .browser_download_url' | head -1)
-        if [[ -z "$ASSET_URL" || "$ASSET_URL" == "null" ]]; then
-            handle_error "No neutron-clang asset found in latest release"
-        fi
-        log_info "Found asset: $ASSET_URL"
-        
-        local_archive_name="neutron-clang.tar.zst"
-        download_with_retry "$ASSET_URL" "$local_archive_name"
-        verify_download "$TEMP_DIR/$local_archive_name"
-        
-        echo -e "${CYAN}📁 Extracting Neutron toolchain (zstd)...${NC}"
-        tar -I zstd -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract Neutron toolchain"
-        
-        # If the archive contains subdirectories (e.g. neutron-clang-<date>), move their contents to the root $CLANG_ROOTDIR
-        cd "$CLANG_ROOTDIR"
-        extracted_dir=$(find . -maxdepth 1 -type d -name "neutron-clang-*" | head -1)
-        if [[ -n "$extracted_dir" && "$extracted_dir" != "." ]]; then
-            echo -e "${CYAN}📂 Moving contents of $extracted_dir to $CLANG_ROOTDIR...${NC}"
-            shopt -s dotglob
-            mv "$extracted_dir"/* ./
-            rmdir "$extracted_dir"
-            shopt -u dotglob
-        fi
-        
-        # Verify the existence of clang
-        if [[ ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
-            handle_error "Neutron Clang binary not found after extraction"
-        fi
-        log_info "Neutron Clang extracted successfully."
-        ;;
-    
-    *)
-        handle_error "Invalid USE_CLANG value: '$USE_CLANG'. Must be 'aosp', 'greenforce', or 'neutron'"
-        ;;
-esac
+# ======================== TOOLCHAIN ========================
+if [[ "${USE_GCC:-false}" == "true" ]]; then
+    # -------- GCC build (no Clang) --------
+    echo -e "${MAGENTA}🔧 Step 2: Setting up GCC toolchain...${NC}"
+    mkdir -p "$GCC64_ROOTDIR" "$GCC32_ROOTDIR"
 
-# 🧹 Clean up temporary files
-rm -rf "$TEMP_DIR"/*
-echo -e "${GREEN}🧹 Temporary files cleaned${NC}"
+    log_info "Cloning GCC64 toolchain..."
+    git clone --depth=1 --branch "$GCC64_BRANCH" "$GCC64_URL" "$GCC64_ROOTDIR" || handle_error "Failed to clone GCC64"
+
+    log_info "Cloning GCC32 toolchain..."
+    git clone --depth=1 --branch "$GCC32_BRANCH" "$GCC32_URL" "$GCC32_ROOTDIR" || handle_error "Failed to clone GCC32"
+
+    echo -e "${GREEN}✅ GCC toolchains downloaded${NC}"
+
+else
+    # -------- Clang build --------
+    echo -e "${MAGENTA}🔧 Step 2: Setting up Clang toolchain ($USE_CLANG)...${NC}"
+    mkdir -p "$CLANG_ROOTDIR"
+
+    case "$USE_CLANG" in
+        "aosp")
+            log_info "Using AOSP Clang toolchain"
+            local_archive_name="aosp-clang.tar.gz"
+            if ! curl --head --silent --fail "$AOSP_CLANG_URL" > /dev/null; then
+                handle_error "AOSP Clang URL not accessible: $AOSP_CLANG_URL"
+            fi
+            download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
+            verify_download "$TEMP_DIR/$local_archive_name"
+            echo -e "${CYAN}📁 Extracting AOSP toolchain...${NC}"
+            tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract AOSP toolchain"
+
+            # For AOSP clang we also need GCC cross compilers (but we may already have them)
+            # They are required for proper linking; download them as well.
+            log_info "Cloning GCC64 toolchain (required for AOSP clang build)..."
+            git clone --depth=1 --branch "$GCC64_BRANCH" "$GCC64_URL" "$GCC64_ROOTDIR" || handle_error "Failed to clone GCC64"
+            log_info "Cloning GCC32 toolchain (required for AOSP clang build)..."
+            git clone --depth=1 --branch "$GCC32_BRANCH" "$GCC32_URL" "$GCC32_ROOTDIR" || handle_error "Failed to clone GCC32"
+            ;;
+
+        "greenforce")
+            log_info "Using Greenforce Clang toolchain"
+            # Fetch the script that exports LATEST_URL. Use source instead of eval for safety.
+            # We'll download the script and then source it to get the variable.
+            GREENFORCE_SCRIPT=$(mktemp)
+            curl -sL --fail "https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_latest_url.sh" -o "$GREENFORCE_SCRIPT" || handle_error "Failed to fetch Greenforce script"
+            # Source the script; it should set LATEST_URL
+            source "$GREENFORCE_SCRIPT" || handle_error "Failed to source Greenforce script"
+            rm -f "$GREENFORCE_SCRIPT"
+            if [[ -z "$LATEST_URL" ]]; then
+                handle_error "LATEST_URL not set after sourcing Greenforce script"
+            fi
+            local_archive_name="greenforce-clang.tar.gz"
+            download_with_retry "$LATEST_URL" "$local_archive_name"
+            verify_download "$TEMP_DIR/$local_archive_name"
+            echo -e "${CYAN}📁 Extracting Greenforce toolchain...${NC}"
+            tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract Greenforce toolchain"
+            ;;
+
+        "neutron")
+            log_info "Using Neutron Clang toolchain"
+            if ! command -v jq &> /dev/null; then
+                handle_error "jq not found. Please install jq."
+            fi
+            RELEASE_API="https://api.github.com/repos/Neutron-Toolchains/clang-build-catalogue/releases/latest"
+            echo -e "${CYAN}🔍 Fetching latest release info from GitHub...${NC}"
+            ASSET_URL=$(curl -sL "$RELEASE_API" | jq -r '.assets[] | select(.name | test("^neutron-clang-.*\\.tar\\.zst$")) | .browser_download_url' | head -1)
+            if [[ -z "$ASSET_URL" || "$ASSET_URL" == "null" ]]; then
+                handle_error "No neutron-clang asset found in latest release"
+            fi
+            log_info "Found asset: $ASSET_URL"
+
+            local_archive_name="neutron-clang.tar.zst"
+            download_with_retry "$ASSET_URL" "$local_archive_name"
+            verify_download "$TEMP_DIR/$local_archive_name"
+
+            echo -e "${CYAN}📁 Extracting Neutron toolchain (zstd)...${NC}"
+            # Use --strip-components=1 to avoid extra directory level
+            tar -I zstd -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=1 || handle_error "Failed to extract Neutron toolchain"
+
+            # Verify clang binary
+            if [[ ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
+                handle_error "Neutron Clang binary not found after extraction"
+            fi
+            log_info "Neutron Clang extracted successfully."
+            ;;
+
+        *)
+            handle_error "Invalid USE_CLANG value: '$USE_CLANG'. Must be 'aosp', 'greenforce', or 'neutron'"
+            ;;
+    esac
+fi
 
 echo ""
 echo -e "${GREEN}"
@@ -181,8 +184,14 @@ echo "╔═══════════════════════�
 echo "║   ✅ DOWNLOAD TASKS COMPLETED SUCCESSFULLY!   ║"
 echo "╠═══════════════════════════════════════╣"
 echo "║   📱 Device: $DEVICE_CODENAME"
-echo "║   ⚙️ Toolchain: $USE_CLANG"
+if [[ "${USE_GCC:-false}" == "true" ]]; then
+    echo "║   ⚙️ Toolchain: GCC"
+else
+    echo "║   ⚙️ Toolchain: $USE_CLANG (Clang)"
+fi
 echo "║   🌿 Kernel Branch: $KERNEL_BRANCH"
-echo "║   📁 Toolchain Path: $CLANG_ROOTDIR"
+[[ "${USE_GCC:-false}" == "true" ]] && echo "║   📁 GCC64 Path: $GCC64_ROOTDIR"
+[[ "${USE_GCC:-false}" == "true" ]] && echo "║   📁 GCC32 Path: $GCC32_ROOTDIR"
+[[ "${USE_GCC:-false}" != "true" ]] && echo "║   📁 Clang Path: $CLANG_ROOTDIR"
 echo "╚═══════════════════════════════════════╝"
 echo -e "${NC}"

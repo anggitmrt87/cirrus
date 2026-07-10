@@ -11,64 +11,86 @@ jobs:
       TZ: "Asia/Jakarta"
       LANG: "C.UTF-8"
       LC_ALL: "C"
-      
+
       # Kernel Configuration
-      DEVICE_CODENAME: "chime"
+      # ------------------------------------------------------------------------
+      # SINGLE DEVICE (backward compatible):
+      #   DEVICE_CODENAME and DEVICE_DEFCONFIG are used when DEVICE_LIST is empty.
+      # MULTI DEVICE:
+      #   DEVICE_LIST is a comma-separated list of "codename:defconfig" entries.
+      #   Example: "chime:vendor/bengal-perf_defconfig vendor/xiaomi/chime.config, lime:vendor/bengal-perf_defconfig vendor/xiaomi/lime.config"
+      #   When DEVICE_LIST is set, it overrides DEVICE_CODENAME and DEVICE_DEFCONFIG.
+      # ------------------------------------------------------------------------
+      DEVICE_CODENAME: "chime"                            # Fallback single device
+      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/chime.config vendor/xiaomi/lime.config vendor/kernelsu.config"   # Fallback
+      DEVICE_LIST: ""                                    # Set this for multi-device builds
+
       BUILD_USER: "builder"
       BUILD_HOST: "mrtproject™"
       KERNEL_NAME: "mrt-kernel"
-      KERNEL_SOURCE: "https://github.com/anggitmrt87/android_kernel_qcom_sm8250.git"
-      KERNEL_BRANCH: "lineage-20"
-      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/chime.config vendor/xiaomi/lime.config vendor/kernelsu.config"
+      KERNEL_SOURCE: "https://github.com/anggitmrt87/kernel_xiaomi_citrus_sm6115.git"
+      KERNEL_BRANCH: "13.0.0-perf"
       ANYKERNEL: "https://github.com/anggitmrt87/AnyKernel3.git"
       ANYKERNEL_BRANCH: "master"
       ARCH: "arm64"
-      
+
       # Telegram (contents of CircleCI project environment variables)
       # TG_TOKEN and TG_CHAT_ID will be taken from the environment
-      
-      # Toolchain Configuration (aosp | greenforce | neutron)
-      USE_CLANG: "neutron"
-      # The absolute path is adjusted to the CircleCI working directory.
-      CIRRUS_WORKING_DIR: "/home/circleci/project"
+
+      # Toolchain Configuration
+      # ------------------------------------------------------------------------
+      # USE_GCC: true  -> build with GCC (no Clang)
+      # USE_GCC: false -> build with Clang (select one of: aosp, greenforce, neutron)
+      # ------------------------------------------------------------------------
+      USE_GCC: "false"
+      USE_CLANG: "neutron"                               # Only used when USE_GCC=false
       CLANG_ROOTDIR: "/home/circleci/project/clang"
-      GCC32_ROOTDIR: "/home/circleci/project/gcc32"
       GCC64_ROOTDIR: "/home/circleci/project/gcc64"
+      GCC32_ROOTDIR: "/home/circleci/project/gcc32"
+      # AOSP Clang URL (used when USE_CLANG=aosp)
       AOSP_CLANG_URL: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/9b144befdfd93b90e02c663504fb9f4b95f9faf8/clang-r596125.tar.gz"
-      
+      # GCC sources (used when USE_GCC=true)
+      GCC64_URL: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
+      GCC64_BRANCH: "android-msm-redbull-4.19-android14-qpr3"
+      GCC32_URL: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
+      GCC32_BRANCH: "android-msm-redbull-4.19-android14-qpr3"
+
       # Kernel Build
       TYPE_IMAGE: "Image.gz"
       BUILD_DTBO: "true"
       DISABLE_LOCALVERSION_ST: "true"
       INCLUDE_DTB: "true"
       DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
-      
+
       # KernelSU
       KERNELSU: "true"
-      KERNELSU_TYPE: "all"
+      KERNELSU_TYPE: "all"                               # sukisu, rksu, kernelsunext, backslashxx, all
       KERNELSU_BRANCH: "hookless"
       KPM_PATCH: "false"
       KPM_VERSION: "0.13.0"
-      
+
       # Build Optimization
       BUILD_OPTIONS: "-j8"
       CCACHE: "false"
       CCACHE_DIR: "/tmp/ccache"
       CCACHE_MAXSIZE: "10G"
-      
+
       # Logging
       DEBUG_MODE: "false"
       KEEP_BUILD_LOGS: "false"
-    
+
+      # Internal working directory (used by scripts)
+      CIRRUS_WORKING_DIR: "/home/circleci/project"
+
     steps:
       - checkout
-      
+
       - restore_cache:
           keys:
             - ccache-{{ checksum "build.sh" }}-{{ .Branch }}
             - ccache-{{ checksum "build.sh" }}
             - ccache-
-      
+
       - run:
           name: "🔄 Update System & Install Dependencies"
           command: |
@@ -79,21 +101,21 @@ jobs:
             echo 'en_US.UTF-8 UTF-8' | sudo tee /etc/locale.gen && sudo /usr/sbin/locale-gen
             sudo ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" | sudo tee /etc/timezone
             sudo apt-get clean
-      
+
       - run:
           name: "📥 Download Kernel & Toolchain"
           command: |
             chmod +x download.sh
             ./download.sh
           no_output_timeout: 1h
-      
+
       - run:
           name: "🔨 Build Kernel"
           command: |
             chmod +x build.sh
             ./build.sh
           no_output_timeout: 3h
-      
+
       - save_cache:
           key: ccache-{{ checksum "build.sh" }}-{{ .Branch }}
           paths:

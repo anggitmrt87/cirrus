@@ -30,12 +30,16 @@ log_step()    { echo -e "${BOLD_CYAN}🚀 [STEP]${NC} $1"; }
 log_progress(){ echo -e "${MAGENTA}📊 [PROGRESS]${NC} $1"; }
 
 # ------------------------------------------------------------------------------
-# 🌟 Global variables (will be set during runtime)
+# 🌟 Global variables (set during runtime)
 # ------------------------------------------------------------------------------
-KERNEL_NAME="${KERNEL_NAME:-mrt-kernel}"
 declare -g START_TIME
 declare -g BUILD_STATUS="failed"
 declare -g BUILD_LOG="${CIRRUS_WORKING_DIR:-.}/build.log"
+declare -g KERNEL_ROOTDIR
+declare -g KERNEL_OUTDIR
+declare -g ANYKERNEL_DIR
+declare -g DEVICE_CODENAME   # will be set per device
+declare -g DEVICE_DEFCONFIG  # will be set per device
 
 # Redirect all output to log file AND console
 exec > >(tee -a "$BUILD_LOG") 2>&1
@@ -56,10 +60,12 @@ check_dependencies() {
     done
 }
 
+# Validate essential environment variables (per device)
 validate_environment() {
-    log_step "Validating environment variables..."
     local required_vars=(
-        "DEVICE_CODENAME" "TG_TOKEN" "TG_CHAT_ID" "BUILD_USER" "BUILD_HOST" "ANYKERNEL" "ANYKERNEL_BRANCH" "KERNEL_SOURCE" "KERNEL_BRANCH" "ARCH"
+        "DEVICE_CODENAME" "TG_TOKEN" "TG_CHAT_ID" "BUILD_USER" "BUILD_HOST"
+        "ANYKERNEL" "ANYKERNEL_BRANCH" "KERNEL_SOURCE" "KERNEL_BRANCH" "ARCH"
+        "DEVICE_DEFCONFIG"
     )
     [[ "${KPM_PATCH:-false}" == "true" ]] && required_vars+=("KPM_VERSION")
 
@@ -75,67 +81,95 @@ validate_environment() {
         exit 1
     fi
 
-    log_success "Environment validation passed."
+    log_success "Environment validation passed for device $DEVICE_CODENAME."
 }
 
 setup_directories() {
-    export KERNEL_ROOTDIR="$CIRRUS_WORKING_DIR/$DEVICE_CODENAME"
-    export KERNEL_OUTDIR="$KERNEL_ROOTDIR/out"
-    export ANYKERNEL_DIR="$CIRRUS_WORKING_DIR/AnyKernel"
+    # Use device-specific output directories to avoid collisions in multi-device builds
+    KERNEL_ROOTDIR="$CIRRUS_WORKING_DIR/$DEVICE_CODENAME"
+    KERNEL_OUTDIR="$KERNEL_ROOTDIR/out"
+    ANYKERNEL_DIR="$CIRRUS_WORKING_DIR/AnyKernel-$DEVICE_CODENAME"
 
     mkdir -p "$KERNEL_OUTDIR" "$ANYKERNEL_DIR"
+    log_info "Directories set: KERNEL_ROOTDIR=$KERNEL_ROOTDIR, OUT=$KERNEL_OUTDIR, ANYKERNEL=$ANYKERNEL_DIR"
 }
 
 setup_toolchain() {
-    # Ensure Clang exists
-    if [[ ! -d "$CLANG_ROOTDIR" || ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
-        log_error "Clang toolchain not found at $CLANG_ROOTDIR"
-        exit 1
-    fi
-
-    local bin_dir="$CLANG_ROOTDIR/bin"
-    export CLANG_VER="$("$bin_dir/clang" --version | head -n1 | sed -E 's/\(http[^)]+\)//g' | awk '{$1=$1};1')"
-    export LLD_VER="$("$bin_dir/ld.lld" --version | head -n1)"
-    export KBUILD_COMPILER_STRING="$CLANG_VER with $LLD_VER"
-
-    # Setup PATH (with ccache if enabled)
-    if [[ "${CCACHE:-false}" == "true" ]]; then
-        export USE_CCACHE=1
-        export CCACHE_EXEC=$(which ccache)
-        export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
-        export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:${PATH}"
-        ccache -o compression=true
-        ccache -o compression_level=1
-        ccache -o max_size="$CCACHE_MAXSIZE"
-        ccache -z
-        log_info "CCache enabled: $CCACHE_DIR (max: $CCACHE_MAXSIZE)"
-    else
-        export PATH="$CLANG_ROOTDIR/bin:${PATH}"
-    fi
-    
-    # Add GCC toolchains for AOSP builds if needed
-    if [[ "${USE_CLANG:-}" == "aosp" ]]; then
-        if [[ ! -d "$GCC32_ROOTDIR" || ! -d "$GCC64_ROOTDIR" ]]; then
-            log_error "GCC toolchains missing for AOSP build"
+    if [[ "${USE_GCC:-false}" == "true" ]]; then
+        # -------- GCC build --------
+        if [[ ! -d "$GCC64_ROOTDIR" || ! -d "$GCC32_ROOTDIR" ]]; then
+            log_error "GCC toolchains not found at $GCC64_ROOTDIR or $GCC32_ROOTDIR"
             exit 1
         fi
-        export PATH="$GCC32_ROOTDIR/bin:$GCC64_ROOTDIR/bin:$PATH"
+        export PATH="$GCC64_ROOTDIR/bin:$GCC32_ROOTDIR/bin:$PATH"
         export BUILD_CROSS_COMPILE="aarch64-linux-android-"
         export BUILD_CROSS_COMPILE_ARM32="arm-linux-androideabi-"
-        if [[ "${ARCH:-}" == "arm64" ]]; then
-            export BUILD_CLANG_TRIPLE="aarch64-linux-gnu-"
-        elif [[ "${ARCH:-}" == "arm" ]]; then
-            export BUILD_CLANG_TRIPLE="arm-linux-gnueabi-"
-        fi
-        export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32 CLANG_TRIPLE=$BUILD_CLANG_TRIPLE"
-    # Non aosp clang
-    else
-        export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
-        export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
-        export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
-    fi
+        export COMPILER_OPTION="CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
+        export KBUILD_COMPILER_STRING="$(${BUILD_CROSS_COMPILE}gcc --version | head -n1)"
+        log_info "Using GCC toolchain: $KBUILD_COMPILER_STRING"
 
-    export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib"
+        # Enable ccache if requested (ccache is used transparently if in PATH)
+        if [[ "${CCACHE:-false}" == "true" ]]; then
+            export USE_CCACHE=1
+            export CCACHE_EXEC=$(which ccache)
+            export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
+            export PATH="/usr/lib/ccache:$PATH"
+            ccache -o compression=true
+            ccache -o compression_level=1
+            ccache -o max_size="$CCACHE_MAXSIZE"
+            ccache -z
+            log_info "CCache enabled: $CCACHE_DIR (max: $CCACHE_MAXSIZE)"
+        fi
+    else
+        # -------- Clang build --------
+        if [[ ! -d "$CLANG_ROOTDIR" || ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
+            log_error "Clang toolchain not found at $CLANG_ROOTDIR"
+            exit 1
+        fi
+
+        local bin_dir="$CLANG_ROOTDIR/bin"
+        export CLANG_VER="$("$bin_dir/clang" --version | head -n1 | sed -E 's/\(http[^)]+\)//g' | awk '{$1=$1};1')"
+        export LLD_VER="$("$bin_dir/ld.lld" --version | head -n1)"
+        export KBUILD_COMPILER_STRING="$CLANG_VER with $LLD_VER"
+
+        # Setup PATH (with ccache if enabled)
+        if [[ "${CCACHE:-false}" == "true" ]]; then
+            export USE_CCACHE=1
+            export CCACHE_EXEC=$(which ccache)
+            export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
+            export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:${PATH}"
+            ccache -o compression=true
+            ccache -o compression_level=1
+            ccache -o max_size="$CCACHE_MAXSIZE"
+            ccache -z
+            log_info "CCache enabled: $CCACHE_DIR (max: $CCACHE_MAXSIZE)"
+        else
+            export PATH="$CLANG_ROOTDIR/bin:${PATH}"
+        fi
+
+        # Add GCC cross compilers for AOSP clang (they are downloaded in download.sh)
+        if [[ "${USE_CLANG:-}" == "aosp" ]]; then
+            if [[ ! -d "$GCC32_ROOTDIR" || ! -d "$GCC64_ROOTDIR" ]]; then
+                log_error "GCC toolchains missing for AOSP build"
+                exit 1
+            fi
+            export PATH="$GCC32_ROOTDIR/bin:$GCC64_ROOTDIR/bin:$PATH"
+            export BUILD_CROSS_COMPILE="aarch64-linux-android-"
+            export BUILD_CROSS_COMPILE_ARM32="arm-linux-androideabi-"
+            if [[ "${ARCH:-}" == "arm64" ]]; then
+                export BUILD_CLANG_TRIPLE="aarch64-linux-gnu-"
+            elif [[ "${ARCH:-}" == "arm" ]]; then
+                export BUILD_CLANG_TRIPLE="arm-linux-gnueabi-"
+            fi
+            export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32 CLANG_TRIPLE=$BUILD_CLANG_TRIPLE"
+        else
+            # Non-AOSP clang (neutron, greenforce)
+            export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
+            export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+            export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
+        fi
+        export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib"
+    fi
 }
 
 setup_build_vars() {
@@ -147,10 +181,10 @@ setup_build_vars() {
     export DATE=$(date +"%Y%m%d-%H%M%S")
     export NUM_CORES=$(nproc)
 
-    # Build options: default to -j<cores> if not already set
     if [[ -z "${BUILD_OPTIONS:-}" ]]; then
         export BUILD_OPTIONS="-j$NUM_CORES"
     fi
+    log_info "Build options: $BUILD_OPTIONS"
 }
 
 setup_telegram() {
@@ -176,10 +210,9 @@ tg_send_sticker() {
 
 send_failure_log() {
     local exit_code="$1"
-    local log_file="$CIRRUS_WORKING_DIR/build_error.log"
+    local log_file="$CIRRUS_WORKING_DIR/build_error_${DEVICE_CODENAME}.log"
     rm -f "$log_file"
 
-    # Capture last 100 lines of build log
     if [[ -f "$BUILD_LOG" ]]; then
         tail -100 "$BUILD_LOG" > "$log_file"
     else
@@ -188,7 +221,7 @@ send_failure_log() {
 
     {
         echo -e "\n=== Build Environment ==="
-        env | grep -E "(CIRRUS|KERNEL|TG_|BUILD_|CLANG_)"
+        env | grep -E "(CIRRUS|KERNEL|TG_|BUILD_|CLANG_|GCC_)"
         echo -e "\n=== System Info ==="
         uname -a
     } >> "$log_file"
@@ -278,13 +311,12 @@ patch_kpm() {
 }
 
 # ------------------------------------------------------------------------------
-# 🏗️ Kernel compilation
+# 🏗️ Kernel compilation steps (per device)
 # ------------------------------------------------------------------------------
 configure_defconfig() {
     cd "$KERNEL_ROOTDIR"
-    log_step "Configuring defconfig..."
+    log_step "Configuring defconfig for $DEVICE_CODENAME..."
 
-    # Clean old configs
     rm -f "$KERNEL_OUTDIR/.config" "$KERNEL_OUTDIR/.config.old"
 
     IFS=' ' read -r -a defconfig_array <<< "$DEVICE_DEFCONFIG"
@@ -297,7 +329,6 @@ configure_defconfig() {
         return 1
     }
 
-    # Merge fragments
     for frag in "${fragments[@]}"; do
         local frag_path="arch/$ARCH/configs/$frag"
         if [[ -f "$frag_path" ]]; then
@@ -311,39 +342,33 @@ configure_defconfig() {
         fi
     done
 
-    # Update config after merges
     if [[ ${#fragments[@]} -gt 0 ]]; then
         make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION || {
             log_error "Failed to update defconfig after merge."
             return 1
         }
     fi
-    
+
     make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" $COMPILER_OPTION savedefconfig
 
-    # ----------------------------------------------------------------------
-    # 🔧 DISABLE_LOCALVERSION_ST if activated
-    # ----------------------------------------------------------------------
+    # Disable LOCALVERSION_AUTO if requested
     if [[ "${DISABLE_LOCALVERSION_ST:-false}" == "true" ]]; then
-        log_info "Menonaktifkan LOCALVERSION_AUTO dan membersihkan LOCALVERSION"
-        # Use scripts/config if available, otherwise use sed (fallback)
+        log_info "Disabling LOCALVERSION_AUTO and clearing LOCALVERSION"
         if [[ -f "scripts/config" ]]; then
             scripts/config --file "$KERNEL_OUTDIR/.config" --disable LOCALVERSION_AUTO
         else
-            log_warning "scripts/config tidak ditemukan, menggunakan sed langsung"
+            log_warning "scripts/config not found, using sed directly"
             sed -i 's/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/g' "$KERNEL_OUTDIR/.config"
         fi
-        # Run olddefconfig for the changes to take effect.
         make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
-        log_success "LOCALVERSION_AUTO dinonaktifkan."
+        log_success "LOCALVERSION_AUTO disabled."
     fi
 }
 
 compile_kernel() {
     cd "$KERNEL_ROOTDIR"
-    log_step "Starting kernel compilation..."
+    log_step "Starting kernel compilation for $DEVICE_CODENAME..."
 
-    # Build targets
     local targets=("$TYPE_IMAGE")
     [[ "${BUILD_DTBO:-false}" == "true" ]] && targets+=("dtbo.img")
 
@@ -352,26 +377,21 @@ compile_kernel() {
         return 1
     fi
 
-    # Verify output
     if [[ ! -f "$IMAGE" ]]; then
         log_error "Kernel image not found at $IMAGE."
         return 1
     fi
 
-    # Check dtbo if requested
     if [[ "${BUILD_DTBO:-false}" == "true" && ! -f "$DTBO" ]]; then
-        log_warning "dtbo.img tidak terbentuk, lanjutkan tanpa dtbo."
+        log_warning "dtbo.img not built, continuing without it."
         BUILD_DTBO=false
     fi
 
     log_success "Kernel compilation successful."
 }
 
-# ------------------------------------------------------------------------------
-# 📦 AnyKernel preparation
-# ------------------------------------------------------------------------------
 prepare_anykernel() {
-    log_step "Preparing AnyKernel..."
+    log_step "Preparing AnyKernel for $DEVICE_CODENAME..."
     rm -rf "$ANYKERNEL_DIR"
     git clone --depth=1 -b "$ANYKERNEL_BRANCH" "$ANYKERNEL" "$ANYKERNEL_DIR" || {
         log_error "Failed to clone AnyKernel repo."
@@ -379,7 +399,6 @@ prepare_anykernel() {
     }
     cd "$ANYKERNEL_DIR"
 
-    # Copy kernel images
     if [[ "${BUILD_DTBO:-false}" == "true" ]]; then
         cp -f "$IMAGE" "$DTBO" . || { log_error "Failed to copy kernel/DTBO"; return 1; }
     else
@@ -390,19 +409,15 @@ prepare_anykernel() {
         if [[ -f "$DTB" ]]; then
             cp -f "$DTB" dtb || { log_error "Failed to copy DTB"; return 1; }
         else
-            log_warning "DTB tidak ditemukan di $DTB, lewati."
+            log_warning "DTB not found at $DTB, skipping."
         fi
     fi
 
     log_success "AnyKernel prepared."
 }
 
-# ------------------------------------------------------------------------------
-# 📊 Build info and zip creation
-# ------------------------------------------------------------------------------
 collect_build_info() {
     cd "$KERNEL_ROOTDIR"
-    # Take kernel release from generated file (more accurate)
     export KERNEL_VERSION=$(cat "$KERNEL_OUTDIR/include/config/kernel.release" 2>/dev/null || echo "N/A")
     export UTS_VERSION=$(grep 'UTS_VERSION' "$KERNEL_OUTDIR/include/generated/compile.h" 2>/dev/null | cut -d'"' -f2 || echo "N/A")
     export LATEST_COMMIT=$(git log --pretty=format:'%s' -1 2>/dev/null | head -c 100 || echo "N/A")
@@ -548,7 +563,50 @@ send_config() {
 }
 
 # ------------------------------------------------------------------------------
-# 🚀 Main orchestration
+# 📦 Build a single device (core build logic)
+# ------------------------------------------------------------------------------
+build_single_device() {
+    local codename="$1"
+    local defconfig_str="$2"
+
+    # Set device-specific variables
+    export DEVICE_CODENAME="$codename"
+    export DEVICE_DEFCONFIG="$defconfig_str"
+
+    log_info "=========================================="
+    log_info "Building for device: $DEVICE_CODENAME"
+    log_info "Defconfig: $DEVICE_DEFCONFIG"
+    log_info "=========================================="
+
+    # Setup per-device directories
+    setup_directories
+
+    # Re-run toolchain setup (PATH, compiler options) – it uses global variables
+    setup_toolchain
+    setup_build_vars
+
+    # Notify start
+    tg_post_msg "🚀 <b>Kernel Build Started for $DEVICE_CODENAME</b>%0A%0A📱 Device: <code>$DEVICE_CODENAME</code>%0A⚙️ Defconfig: <code>$DEVICE_DEFCONFIG</code>%0A🔧 Toolchain: <code>${KBUILD_COMPILER_STRING:-N/A}</code>"
+
+    # Build steps
+    install_kernelsu
+    configure_defconfig || return 1
+    # Re-run olddefconfig to absorb any new Kconfig symbols (e.g. from KernelSU)
+    make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
+    compile_kernel || return 1
+    BUILD_STATUS="success"
+    patch_kpm
+    prepare_anykernel || return 1
+    collect_build_info
+    create_and_upload_zip || return 1
+    send_config
+
+    log_success "Build for $DEVICE_CODENAME completed successfully."
+    return 0
+}
+
+# ------------------------------------------------------------------------------
+# 🚀 Main orchestration (multi-device or single)
 # ------------------------------------------------------------------------------
 main() {
     echo -e "${BOLD_CYAN}"
@@ -560,46 +618,71 @@ main() {
     START_TIME=$(date +%s)
     > "$BUILD_LOG"
 
-    # Setup
+    # Global setup
     check_dependencies
-    validate_environment
-    setup_directories
-    setup_toolchain
-    setup_build_vars
     setup_telegram
 
-    # Display info
-    echo -e "${BOLD_BLUE}╔═══════════════════════════════════════╗${NC}"
-    echo -e "${BOLD_BLUE}║          BUILD INFORMATION            ║${NC}"
-    echo -e "${BOLD_BLUE}╠═══════════════════════════════════════╣${NC}"
-    echo -e "${BOLD_BLUE}║${NC} 👤 Builder:      ${GREEN}$KBUILD_BUILD_USER${NC}"
-    echo -e "${BOLD_BLUE}║${NC} 🏠 Host:         ${GREEN}$KBUILD_BUILD_HOST${NC}"
-    echo -e "${BOLD_BLUE}║${NC} 📱 Device:       ${YELLOW}$DEVICE_CODENAME${NC}"
-    echo -e "${BOLD_BLUE}║${NC} ⚙️  Defconfig:    ${YELLOW}$DEVICE_DEFCONFIG${NC}"
-    echo -e "${BOLD_BLUE}║${NC} 🛠️  Toolchain:   ${CYAN}$KBUILD_COMPILER_STRING${NC}"
-    echo -e "${BOLD_BLUE}║${NC} 💾 Build opts:   ${MAGENTA}$BUILD_OPTIONS${NC}"
-    echo -e "${BOLD_BLUE}║${NC} ⚡ Cores:        ${GREEN}$NUM_CORES${NC}"
-    echo -e "${BOLD_BLUE}╚═══════════════════════════════════════╝${NC}"
+    # Determine device list
+    local devices=()
+    if [[ -n "${DEVICE_LIST:-}" ]]; then
+        # Multi-device mode: parse DEVICE_LIST
+        IFS=',' read -ra entries <<< "$DEVICE_LIST"
+        for entry in "${entries[@]}"; do
+            # Trim whitespace
+            entry=$(echo "$entry" | xargs)
+            if [[ -n "$entry" ]]; then
+                # Split at first colon
+                if [[ "$entry" == *":"* ]]; then
+                    codename="${entry%%:*}"
+                    defconfig="${entry#*:}"
+                    defconfig=$(echo "$defconfig" | xargs)   # trim spaces
+                    devices+=("$codename|$defconfig")
+                else
+                    log_error "Invalid entry in DEVICE_LIST: '$entry' (expected 'codename:defconfig')"
+                    exit 1
+                fi
+            fi
+        done
+    else
+        # Single device mode (fallback)
+        if [[ -n "${DEVICE_CODENAME:-}" && -n "${DEVICE_DEFCONFIG:-}" ]]; then
+            devices=("$DEVICE_CODENAME|$DEVICE_DEFCONFIG")
+        else
+            log_error "Neither DEVICE_LIST nor (DEVICE_CODENAME & DEVICE_DEFCONFIG) are set."
+            exit 1
+        fi
+    fi
 
-    # Build steps
-    tg_post_msg "🚀 <b>Kernel Build Started!</b>%0A%0A📱 Device: <code>$DEVICE_CODENAME</code>%0A⚙️ Defconfig: <code>$DEVICE_DEFCONFIG</code>%0A🔧 Toolchain: <code>$KBUILD_COMPILER_STRING</code>"
+    if [[ ${#devices[@]} -eq 0 ]]; then
+        log_error "No devices to build."
+        exit 1
+    fi
 
-    install_kernelsu
-    configure_defconfig || exit 1
-    # =============== FIX ===============
-    # Re-run olddefconfig to absorb any new Kconfig symbols from KernelSU
-    make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
-    # ===================================
-    compile_kernel || exit 1
-    BUILD_STATUS="success"
-    patch_kpm
-    prepare_anykernel || exit 1
-    collect_build_info
-    create_and_upload_zip || exit 1
-    send_config
+    log_info "Devices to build: ${#devices[@]}"
+    for dev in "${devices[@]}"; do
+        IFS='|' read -r codename defconfig <<< "$dev"
+        log_info "  - $codename: $defconfig"
+    done
 
-    log_success "All tasks completed successfully."
-    return 0
+    # Build each device
+    local failed_devices=()
+    for dev in "${devices[@]}"; do
+        IFS='|' read -r codename defconfig <<< "$dev"
+        if ! build_single_device "$codename" "$defconfig"; then
+            log_error "Build failed for $codename"
+            failed_devices+=("$codename")
+        fi
+    done
+
+    # Summary
+    if [[ ${#failed_devices[@]} -eq 0 ]]; then
+        log_success "All devices built successfully!"
+        tg_post_msg "✅ <b>All kernel builds completed successfully!</b>%0A📱 Devices: ${#devices[@]}"
+    else
+        log_error "Build failed for devices: ${failed_devices[*]}"
+        tg_post_msg "❌ <b>Some builds failed</b>%0AFailed: ${failed_devices[*]}"
+        exit 1
+    fi
 }
 
 # ------------------------------------------------------------------------------
