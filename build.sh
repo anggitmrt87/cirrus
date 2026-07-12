@@ -38,8 +38,8 @@ declare -g BUILD_LOG="${CIRRUS_WORKING_DIR:-.}/build.log"
 declare -g KERNEL_ROOTDIR
 declare -g KERNEL_OUTDIR
 declare -g ANYKERNEL_DIR
-declare -g DEVICE_CODENAME   # will be set per device
-declare -g DEVICE_DEFCONFIG  # will be set per device
+declare -g DEVICE_CODENAME
+declare -g DEVICE_DEFCONFIG
 
 # Redirect all output to log file AND console
 exec > >(tee -a "$BUILD_LOG") 2>&1
@@ -60,7 +60,6 @@ check_dependencies() {
     done
 }
 
-# Validate essential environment variables (per device)
 validate_environment() {
     local required_vars=(
         "DEVICE_CODENAME" "TG_TOKEN" "TG_CHAT_ID" "BUILD_USER" "BUILD_HOST"
@@ -85,7 +84,6 @@ validate_environment() {
 }
 
 setup_directories() {
-    # Use device-specific output directories to avoid collisions in multi-device builds
     KERNEL_ROOTDIR="$CIRRUS_WORKING_DIR/$DEVICE_CODENAME"
     KERNEL_OUTDIR="$KERNEL_ROOTDIR/out"
     ANYKERNEL_DIR="$CIRRUS_WORKING_DIR/AnyKernel-$DEVICE_CODENAME"
@@ -108,7 +106,6 @@ setup_toolchain() {
         export KBUILD_COMPILER_STRING="$(${BUILD_CROSS_COMPILE}gcc --version | head -n1)"
         log_info "Using GCC toolchain: $KBUILD_COMPILER_STRING"
 
-        # Enable ccache if requested (ccache is used transparently if in PATH)
         if [[ "${CCACHE:-false}" == "true" ]]; then
             export USE_CCACHE=1
             export CCACHE_EXEC=$(which ccache)
@@ -132,7 +129,6 @@ setup_toolchain() {
         export LLD_VER="$("$bin_dir/ld.lld" --version | head -n1)"
         export KBUILD_COMPILER_STRING="$CLANG_VER with $LLD_VER"
 
-        # Setup PATH (with ccache if enabled)
         if [[ "${CCACHE:-false}" == "true" ]]; then
             export USE_CCACHE=1
             export CCACHE_EXEC=$(which ccache)
@@ -147,7 +143,6 @@ setup_toolchain() {
             export PATH="$CLANG_ROOTDIR/bin:${PATH}"
         fi
 
-        # Add GCC cross compilers for AOSP clang (they are downloaded in download.sh)
         if [[ "${USE_CLANG:-}" == "aosp" ]]; then
             if [[ ! -d "$GCC32_ROOTDIR" || ! -d "$GCC64_ROOTDIR" ]]; then
                 log_error "GCC toolchains missing for AOSP build"
@@ -163,7 +158,6 @@ setup_toolchain() {
             fi
             export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32 CLANG_TRIPLE=$BUILD_CLANG_TRIPLE"
         else
-            # Non-AOSP clang (neutron, greenforce)
             export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
             export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
             export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
@@ -188,24 +182,44 @@ setup_build_vars() {
 }
 
 setup_telegram() {
+    export PATH="$HOME/.local/bin:$PATH"
+    export TELEGRAM_TOKEN="$TG_TOKEN"
+    export TELEGRAM_CHAT_ID="$TG_CHAT_ID"
+    # Create config file for telegram-send
+    mkdir -p "$HOME/.config"
+    cat > "$HOME/.config/telegram-send.conf" <<EOF
+[telegram]
+token = $TG_TOKEN
+chat_id = $TG_CHAT_ID
+EOF
     export BOT_MSG_URL="https://api.telegram.org/bot$TG_TOKEN/sendMessage"
     export BOT_DOC_URL="https://api.telegram.org/bot$TG_TOKEN/sendDocument"
 }
 
+# ------------------------------------------------------------------------------
+# 📨 Telegram functions (using telegram-send when available)
+# ------------------------------------------------------------------------------
 tg_post_msg() {
     local message="$1"
     local parse_mode="${2:-html}"
-    curl -s -X POST "$BOT_MSG_URL" \
-        -d chat_id="$TG_CHAT_ID" \
-        -d "disable_web_page_preview=true" \
-        -d "parse_mode=$parse_mode" \
-        -d text="$message" >/dev/null || log_warning "Failed to send message"
+    if command -v telegram-send &>/dev/null; then
+        # telegram-send uses --format for parse mode
+        telegram-send --format html "$message" || log_warning "Failed to send message via telegram-send"
+    else
+        curl -s -X POST "$BOT_MSG_URL" \
+            -d chat_id="$TG_CHAT_ID" \
+            -d "disable_web_page_preview=true" \
+            -d "parse_mode=$parse_mode" \
+            -d text="$message" >/dev/null || log_warning "Failed to send message (curl fallback)"
+    fi
 }
 
 tg_send_sticker() {
     local sticker_id="$1"
-    local url="https://api.telegram.org/bot$TG_TOKEN/sendSticker"
-    curl -s -X POST "$url" -d sticker="$sticker_id" -d chat_id="$TG_CHAT_ID" >/dev/null || log_warning "Failed to send sticker"
+    # telegram-send can't send by sticker ID directly, so we keep using curl
+    curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendSticker" \
+        -d sticker="$sticker_id" \
+        -d chat_id="$TG_CHAT_ID" >/dev/null || log_warning "Failed to send sticker"
 }
 
 send_failure_log() {
@@ -228,12 +242,20 @@ send_failure_log() {
 
     if [[ -f "$log_file" ]]; then
         local doc_name="build_error_${DEVICE_CODENAME}_$(date +%s).log"
-        local caption="❌ <b>Kernel Build Failed</b>%0A📱 Device: <code>$DEVICE_CODENAME</code>%0A🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')%0A🔢 Exit Code: $exit_code"
-        curl -F document=@"$log_file" -F filename="$doc_name" "$BOT_DOC_URL" \
-            -F chat_id="$TG_CHAT_ID" \
-            -F "disable_web_page_preview=true" \
-            -F "parse_mode=html" \
-            -F caption="$caption" >/dev/null || log_warning "Failed to send error log"
+        if command -v telegram-send &>/dev/null; then
+            # Send file without caption (caption plain text only)
+            telegram-send --file "$log_file" || log_warning "Failed to send error log"
+            # Send a separate message with details (HTML)
+            tg_post_msg "❌ <b>Kernel Build Failed</b>%0A📱 Device: <code>$DEVICE_CODENAME</code>%0A🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')%0A🔢 Exit Code: $exit_code"
+        else
+            # Fallback to curl with caption HTML
+            local caption="❌ <b>Kernel Build Failed</b>%0A📱 Device: <code>$DEVICE_CODENAME</code>%0A🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')%0A🔢 Exit Code: $exit_code"
+            curl -F document=@"$log_file" -F filename="$doc_name" "$BOT_DOC_URL" \
+                -F chat_id="$TG_CHAT_ID" \
+                -F "disable_web_page_preview=true" \
+                -F "parse_mode=html" \
+                -F caption="$caption" >/dev/null || log_warning "Failed to send error log (curl fallback)"
+        fi
     fi
 }
 
@@ -251,7 +273,6 @@ cleanup() {
         tg_send_sticker "CAACAgQAAx0EabRMmQACAnRjEUAXBTK1Ei_zbJNPFH7WCLzSdAACpBEAAqbxcR716gIrH45xdB4E"
     fi
 
-    # Clean temporary files
     rm -rf "$CIRRUS_WORKING_DIR"/*.tar.* "$CIRRUS_WORKING_DIR"/tmp_downloads 2>/dev/null || true
     [[ "${KEEP_BUILD_LOGS:-false}" != "true" ]] && rm -f "$BUILD_LOG"
 
@@ -351,7 +372,6 @@ configure_defconfig() {
 
     make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" $COMPILER_OPTION savedefconfig
 
-    # Disable LOCALVERSION_AUTO if requested
     if [[ "${DISABLE_LOCALVERSION_ST:-false}" == "true" ]]; then
         log_info "Disabling LOCALVERSION_AUTO and clearing LOCALVERSION"
         if [[ -f "scripts/config" ]]; then
@@ -515,23 +535,34 @@ create_and_upload_zip() {
     local zip_md5=$(md5sum "$zip_name" | cut -d' ' -f1)
     local zip_sha256=$(sha256sum "$zip_name" | cut -d' ' -f1)
 
+    # Generate caption for separate message (HTML)
     local caption=$(generate_caption "$zip_name" "$zip_size" "$zip_sha256" "$zip_md5" "$zip_sha1")
 
     log_step "Uploading to Telegram..."
     local upload_success=false
     for i in {1..3}; do
-        if curl -F document=@"$zip_name" -F filename="$zip_name" "$BOT_DOC_URL" \
-             -F chat_id="$TG_CHAT_ID" \
-             -F "disable_web_page_preview=true" \
-             -F "parse_mode=html" \
-             -F caption="$caption" \
-             --fail --show-error --max-time 600; then
-            upload_success=true
-            break
+        if command -v telegram-send &>/dev/null; then
+            # Send file with plain text caption (just file name) and then send detailed message
+            if telegram-send --file "$zip_name" --caption "Kernel zip: $zip_name"; then
+                upload_success=true
+                # Send detailed HTML message
+                tg_post_msg "$caption"
+                break
+            fi
         else
-            log_warning "Upload attempt $i failed. Retrying in 5s..."
-            sleep 5
+            # Fallback: send file with full HTML caption via curl
+            if curl -F document=@"$zip_name" -F filename="$zip_name" "$BOT_DOC_URL" \
+                 -F chat_id="$TG_CHAT_ID" \
+                 -F "disable_web_page_preview=true" \
+                 -F "parse_mode=html" \
+                 -F caption="$caption" \
+                 --fail --show-error --max-time 600; then
+                upload_success=true
+                break
+            fi
         fi
+        log_warning "Upload attempt $i failed. Retrying in 5s..."
+        sleep 5
     done
 
     if $upload_success; then
@@ -548,18 +579,30 @@ send_config() {
 
     local config_size=$(du -h "$config_file" | cut -f1)
     local config_name="config-${DEVICE_CODENAME}-${DATE}.txt"
-    local captionconfig="⚙️ <b>Kernel Config for $DEVICE_CODENAME</b>
+    local captionconfig="⚙️ Kernel Config for $DEVICE_CODENAME
+Date: $(date +'%Y-%m-%d %H:%M:%S')
+Size: $config_size
+Compiler: $KBUILD_COMPILER_STRING
+Branch: ${BRANCH:-N/A}
+Commit: ${LATEST_COMMIT:-N/A}"
+
+    if command -v telegram-send &>/dev/null; then
+        # telegram-send doesn't support HTML caption, send plain text caption
+        telegram-send --file "$config_file" --caption "$captionconfig" && log_success "Config sent." || log_warning "Failed to send config."
+    else
+        # curl fallback with HTML caption
+        local caption_html="⚙️ <b>Kernel Config for $DEVICE_CODENAME</b>
 📅 Date: $(date +'%Y-%m-%d %H:%M:%S')
 📏 Size: $config_size
 🔧 Compiler: $KBUILD_COMPILER_STRING
 🌿 Branch: ${BRANCH:-N/A}
 📝 Commit: ${LATEST_COMMIT:-N/A}"
-
-    curl -F document=@"$config_file" -F filename="$config_name" "$BOT_DOC_URL" \
-        -F chat_id="$TG_CHAT_ID" \
-        -F "disable_web_page_preview=true" \
-        -F "parse_mode=html" \
-        -F caption="$captionconfig" >/dev/null && log_success "Config sent." || log_warning "Failed to send config."
+        curl -F document=@"$config_file" -F filename="$config_name" "$BOT_DOC_URL" \
+            -F chat_id="$TG_CHAT_ID" \
+            -F "disable_web_page_preview=true" \
+            -F "parse_mode=html" \
+            -F caption="$caption_html" >/dev/null && log_success "Config sent." || log_warning "Failed to send config."
+    fi
 }
 
 # ------------------------------------------------------------------------------
@@ -569,7 +612,6 @@ build_single_device() {
     local codename="$1"
     local defconfig_str="$2"
 
-    # Set device-specific variables
     export DEVICE_CODENAME="$codename"
     export DEVICE_DEFCONFIG="$defconfig_str"
 
@@ -578,20 +620,14 @@ build_single_device() {
     log_info "Defconfig: $DEVICE_DEFCONFIG"
     log_info "=========================================="
 
-    # Setup per-device directories
     setup_directories
-
-    # Re-run toolchain setup (PATH, compiler options) – it uses global variables
     setup_toolchain
     setup_build_vars
 
-    # Notify start
     tg_post_msg "🚀 <b>Kernel Build Started for $DEVICE_CODENAME</b>%0A%0A📱 Device: <code>$DEVICE_CODENAME</code>%0A⚙️ Defconfig: <code>$DEVICE_DEFCONFIG</code>%0A🔧 Toolchain: <code>${KBUILD_COMPILER_STRING:-N/A}</code>"
 
-    # Build steps
     install_kernelsu
     configure_defconfig || return 1
-    # Re-run olddefconfig to absorb any new Kconfig symbols (e.g. from KernelSU)
     make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
     compile_kernel || return 1
     BUILD_STATUS="success"
@@ -618,24 +654,19 @@ main() {
     START_TIME=$(date +%s)
     > "$BUILD_LOG"
 
-    # Global setup
     check_dependencies
     setup_telegram
 
-    # Determine device list
     local devices=()
     if [[ -n "${DEVICE_LIST:-}" ]]; then
-        # Multi-device mode: parse DEVICE_LIST
         IFS=',' read -ra entries <<< "$DEVICE_LIST"
         for entry in "${entries[@]}"; do
-            # Trim whitespace
             entry=$(echo "$entry" | xargs)
             if [[ -n "$entry" ]]; then
-                # Split at first colon
                 if [[ "$entry" == *":"* ]]; then
                     codename="${entry%%:*}"
                     defconfig="${entry#*:}"
-                    defconfig=$(echo "$defconfig" | xargs)   # trim spaces
+                    defconfig=$(echo "$defconfig" | xargs)
                     devices+=("$codename|$defconfig")
                 else
                     log_error "Invalid entry in DEVICE_LIST: '$entry' (expected 'codename:defconfig')"
@@ -644,7 +675,6 @@ main() {
             fi
         done
     else
-        # Single device mode (fallback)
         if [[ -n "${DEVICE_CODENAME:-}" && -n "${DEVICE_DEFCONFIG:-}" ]]; then
             devices=("$DEVICE_CODENAME|$DEVICE_DEFCONFIG")
         else
@@ -664,7 +694,6 @@ main() {
         log_info "  - $codename: $defconfig"
     done
 
-    # Build each device
     local failed_devices=()
     for dev in "${devices[@]}"; do
         IFS='|' read -r codename defconfig <<< "$dev"
@@ -674,7 +703,6 @@ main() {
         fi
     done
 
-    # Summary
     if [[ ${#failed_devices[@]} -eq 0 ]]; then
         log_success "All devices built successfully!"
         tg_post_msg "✅ <b>All kernel builds completed successfully!</b>%0A📱 Devices: ${#devices[@]}"
