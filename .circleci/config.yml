@@ -12,15 +12,15 @@ jobs:
       LC_ALL: "C"
 
       # Kernel Configuration
-      DEVICE_CODENAME: "chime"
-      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/chime.config vendor/xiaomi/lime.config vendor/kernelsu.config"
+      DEVICE_CODENAME: "lime"
+      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/xiaomi/lime.config vendor/kernelsu.config"
       DEVICE_LIST: ""
 
       BUILD_USER: "builder"
       BUILD_HOST: "mrtproject™"
-      KERNEL_NAME: "mrt-kernel"
-      KERNEL_SOURCE: "https://github.com/anggitmrt87/kernel_xiaomi_citrus_sm6115.git"
-      KERNEL_BRANCH: "13.0.0-perf"
+      KERNEL_NAME: "valeryn-kernel"
+      KERNEL_SOURCE: "https://github.com/anggitmrt87/valeryn_xiaomi_sm6115.git"
+      KERNEL_BRANCH: "android16"
       ANYKERNEL: "https://github.com/anggitmrt87/AnyKernel3.git"
       ANYKERNEL_BRANCH: "master"
       ARCH: "arm64"
