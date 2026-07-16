@@ -18,7 +18,7 @@ jobs:
 
       BUILD_USER: "builder"
       BUILD_HOST: "mrtproject™"
-      KERNEL_NAME: "mrt-kernel"
+      KERNEL_NAME: "Reborn-kernel"
       KERNEL_SOURCE: "https://github.com/anggitmrt87/kernel_xiaomi_citrus_sm6115.git"
       KERNEL_BRANCH: "13.0.0-perf"
       ANYKERNEL: "https://github.com/anggitmrt87/AnyKernel3.git"
