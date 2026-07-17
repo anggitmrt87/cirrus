@@ -30,7 +30,7 @@ jobs:
 
       # Toolchain
       USE_GCC: "false"
-      USE_CLANG: "zyc"
+      USE_CLANG: "neutron"
       ZYC_VERSION: "16.0.6-20260716"
       CLANG_ROOTDIR: "/home/circleci/project/clang"
       GCC64_ROOTDIR: "/home/circleci/project/gcc64"
