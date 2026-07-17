@@ -157,7 +157,7 @@ setup_toolchain() {
                 export BUILD_CLANG_TRIPLE="arm-linux-gnueabi-"
             fi
             export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32 CLANG_TRIPLE=$BUILD_CLANG_TRIPLE"
-        else if [[ "${USE_CLANG:-}" == "zyc" ]]; then
+        elif [[ "${USE_CLANG:-}" == "zyc" ]]; then
             export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
             export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
             if [[ "${ARCH:-}" == "arm64" ]]; then
