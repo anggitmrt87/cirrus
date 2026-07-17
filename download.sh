@@ -171,14 +171,14 @@ else
             fi
             log_info "Neutron Clang extracted successfully."
             ;;
-            
+
         "zyc")
             log_info "Using ZyCromerZ Clang toolchain"
             if [[ -z "${ZYC_VERSION:-}" ]]; then
                 handle_error "ZYC_VERSION not set. Please specify version like '16.0.6-20260716'"
             fi
             local_archive_name="zyc-clang.tar.gz"
-            local download_url="https://github.com/ZyCromerZ/Clang/releases/download/${ZYC_VERSION}-release/Clang-${ZYC_VERSION}.tar.gz"
+            download_url="https://github.com/ZyCromerZ/Clang/releases/download/${ZYC_VERSION}-release/Clang-${ZYC_VERSION}.tar.gz"
             download_with_retry "$download_url" "$local_archive_name"
             verify_download "$TEMP_DIR/$local_archive_name"
             echo -e "${CYAN}📁 Extracting ZyCromerZ toolchain...${NC}"
@@ -186,7 +186,7 @@ else
             ;;
 
         *)
-            handle_error "Invalid USE_CLANG value: '$USE_CLANG'. Must be 'aosp', 'greenforce', or 'neutron'"
+            handle_error "Invalid USE_CLANG value: '$USE_CLANG'. Must be 'aosp', 'greenforce', 'neutron', or 'zyc'"
             ;;
     esac
 fi
