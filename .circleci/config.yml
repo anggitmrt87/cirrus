@@ -82,7 +82,7 @@ jobs:
             apt-get update -qq
             apt-get install sudo -y
             sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo6 jq zstd python3-pip python3-venv pipx
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo6 jq zstd python3-pip python3-venv pipx libxml2 libxml2-dev
             pipx ensurepath
             export PATH="$HOME/.local/bin:$PATH"
             pipx install telegram-send
