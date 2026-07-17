@@ -125,6 +125,7 @@ setup_toolchain() {
         fi
 
         local bin_dir="$CLANG_ROOTDIR/bin"
+        export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib:$LD_LIBRARY_PATH"
         export CLANG_VER="$("$bin_dir/clang" --version | head -n1 | sed -E 's/\(http[^)]+\)//g' | awk '{$1=$1};1')"
         export LLD_VER="$("$bin_dir/ld.lld" --version | head -n1)"
         export KBUILD_COMPILER_STRING="$CLANG_VER with $LLD_VER"
@@ -162,7 +163,6 @@ setup_toolchain() {
             export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
             export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
         fi
-        export LD_LIBRARY_PATH="$CLANG_ROOTDIR/lib"
     fi
 }
 
