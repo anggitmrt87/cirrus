@@ -254,10 +254,17 @@ send_failure_log() {
             # Send file without caption (caption plain text only)
             telegram-send --file "$log_file" || log_warning "Failed to send error log"
             # Send a separate message with details (HTML)
-            tg_post_msg "❌ <b>Kernel Build Failed</b>%0A📱 Device: <code>$DEVICE_CODENAME</code>%0A🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')%0A🔢 Exit Code: $exit_code"
+            # Menggunakan newline literal
+            tg_post_msg "❌ <b>Kernel Build Failed</b>
+📱 Device: <code>$DEVICE_CODENAME</code>
+🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')
+🔢 Exit Code: $exit_code"
         else
             # Fallback to curl with caption HTML
-            local caption="❌ <b>Kernel Build Failed</b>%0A📱 Device: <code>$DEVICE_CODENAME</code>%0A🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')%0A🔢 Exit Code: $exit_code"
+            local caption="❌ <b>Kernel Build Failed</b>
+📱 Device: <code>$DEVICE_CODENAME</code>
+🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')
+🔢 Exit Code: $exit_code"
             curl -F document=@"$log_file" -F filename="$doc_name" "$BOT_DOC_URL" \
                 -F chat_id="$TG_CHAT_ID" \
                 -F "disable_web_page_preview=true" \
@@ -598,7 +605,7 @@ Commit: ${LATEST_COMMIT:-N/A}"
         # telegram-send doesn't support HTML caption, send plain text caption
         telegram-send --file "$config_file" --caption "$captionconfig" && log_success "Config sent." || log_warning "Failed to send config."
     else
-        # curl fallback with HTML caption
+        # curl fallback with HTML caption (menggunakan newline literal)
         local caption_html="⚙️ <b>Kernel Config for $DEVICE_CODENAME</b>
 📅 Date: $(date +'%Y-%m-%d %H:%M:%S')
 📏 Size: $config_size
@@ -632,7 +639,12 @@ build_single_device() {
     setup_toolchain
     setup_build_vars
 
-    tg_post_msg "🚀 <b>Kernel Build Started for $DEVICE_CODENAME</b>%0A%0A📱 Device: <code>$DEVICE_CODENAME</code>%0A⚙️ Defconfig: <code>$DEVICE_DEFCONFIG</code>%0A🔧 Toolchain: <code>${KBUILD_COMPILER_STRING:-N/A}</code>"
+    # Menggunakan newline literal, bukan %0A
+    tg_post_msg "🚀 <b>Kernel Build Started for $DEVICE_CODENAME</b>
+
+📱 Device: <code>$DEVICE_CODENAME</code>
+⚙️ Defconfig: <code>$DEVICE_DEFCONFIG</code>
+🔧 Toolchain: <code>${KBUILD_COMPILER_STRING:-N/A}</code>"
 
     install_kernelsu
     configure_defconfig || return 1
@@ -713,10 +725,12 @@ main() {
 
     if [[ ${#failed_devices[@]} -eq 0 ]]; then
         log_success "All devices built successfully!"
-        tg_post_msg "✅ <b>All kernel builds completed successfully!</b>%0A📱 Devices: ${#devices[@]}"
+        tg_post_msg "✅ <b>All kernel builds completed successfully!</b>
+📱 Devices: ${#devices[@]}"
     else
         log_error "Build failed for devices: ${failed_devices[*]}"
-        tg_post_msg "❌ <b>Some builds failed</b>%0AFailed: ${failed_devices[*]}"
+        tg_post_msg "❌ <b>Some builds failed</b>
+Failed: ${failed_devices[*]}"
         exit 1
     fi
 }
