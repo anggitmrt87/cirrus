@@ -20,7 +20,7 @@ jobs:
       BUILD_HOST: "mrtproject™"
       KERNEL_NAME: "Reborn-kernel"
       KERNEL_SOURCE: "https://github.com/MRT-project/kernel_xiaomi_chime_sm6115.git"
-      KERNEL_BRANCH: "android16"
+      KERNEL_BRANCH: "test"
       ANYKERNEL: "https://github.com/anggitmrt87/AnyKernel3.git"
       ANYKERNEL_BRANCH: "master"
       ARCH: "arm64"
