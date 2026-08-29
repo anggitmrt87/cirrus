@@ -13,7 +13,7 @@ jobs:
 
       # Kernel Configuration
       DEVICE_CODENAME: "chime"
-      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/android-base.config"
+      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/android-base.config vendor/kernelsu.config"
       DEVICE_LIST: ""
 
       BUILD_USER: "builder"
@@ -49,7 +49,7 @@ jobs:
       DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
       # KernelSU
-      KERNELSU: "false"
+      KERNELSU: "true"
       KERNELSU_TYPE: "all"
       KERNELSU_BRANCH: "hookless"
       KPM_PATCH: "false"
