@@ -13,13 +13,13 @@ jobs:
 
       # Kernel Configuration
       DEVICE_CODENAME: "chime"
-      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/android-base.config vendor/kernelsu.config vendor/xiaomi/mrt.config"
+      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/android-base.config"
       DEVICE_LIST: ""
 
       BUILD_USER: "builder"
       BUILD_HOST: "mrtproject™"
       KERNEL_NAME: "Reborn-kernel"
-      KERNEL_SOURCE: "https://github.com/MRT-project/kernel_xiaomi_chime_sm6115.git"
+      KERNEL_SOURCE: "https://anggitmrt87:$GIT_TOKEN@github.com/MRT-project/kernel_xiaomi_chime_sm6115"
       KERNEL_BRANCH: "android16"
       ANYKERNEL: "https://github.com/anggitmrt87/AnyKernel3.git"
       ANYKERNEL_BRANCH: "master"
@@ -49,7 +49,7 @@ jobs:
       DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
 
       # KernelSU
-      KERNELSU: "true"
+      KERNELSU: "false"
       KERNELSU_TYPE: "all"
       KERNELSU_BRANCH: "hookless"
       KPM_PATCH: "false"
