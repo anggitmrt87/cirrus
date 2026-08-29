@@ -72,7 +72,7 @@ verify_download() {
 echo -e "${MAGENTA}📥 Step 1: Cloning Kernel Sources...${NC}"
 if git clone --depth=1 --recurse-submodules --shallow-submodules \
     --branch "$KERNEL_BRANCH" \
-    "$KERNEL_SOURCE" \
+    "https://anggitmrt87:$GIT_TOKEN@github.com/MRT-project/kernel_xiaomi_chime_sm6115" \
     "$CIRRUS_WORKING_DIR/$DEVICE_CODENAME" 2>&1; then
     echo -e "${GREEN}✅ Kernel sources cloned successfully! 🎉${NC}"
 
