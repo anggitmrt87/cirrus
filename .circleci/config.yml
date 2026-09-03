@@ -13,7 +13,7 @@ jobs:
 
       # Kernel Configuration
       DEVICE_CODENAME: "chime"
-      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/android-base.config vendor/kernelsu.config"
+      DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/android-base.config vendor/kernelsu.config vendor/xiaomi/mrt.config"
       DEVICE_LIST: ""
 
       BUILD_USER: "builder"
