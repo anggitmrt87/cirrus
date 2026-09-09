@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# ============================================================
 # Color codes
+# ============================================================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -16,6 +18,9 @@ echo "║      📥 SOURCE & TOOLCHAIN DOWNLOADER  ║"
 echo "╚═══════════════════════════════════════╝"
 echo -e "${NC}"
 
+# ============================================================
+# Helper functions
+# ============================================================
 handle_error() {
     echo -e "${RED}❌ [ERROR] $1${NC}"
     exit 1
@@ -37,6 +42,9 @@ for cmd in aria2c git curl; do
     fi
 done
 
+# ------------------------------------------------------------
+# Download with retry (aria2c)
+# ------------------------------------------------------------
 download_with_retry() {
     local url="$1"
     local dest_file="$2"
@@ -48,7 +56,9 @@ download_with_retry() {
 
     while [[ $attempt -le $retries ]]; do
         echo -e "${BLUE}🔄 Attempt $attempt/$retries...${NC}"
-        if aria2c --check-certificate=false -x 16 -s 16 "$url" -d "$TEMP_DIR" -o "$dest_file" --console-log-level=warn; then
+        # --check-integrity=true  helps when server provides checksum (rare)
+        if aria2c --check-certificate=false -x 16 -s 16 "$url" -d "$TEMP_DIR" -o "$dest_file" \
+                  --console-log-level=warn --check-integrity=true; then
             echo -e "${GREEN}✅ Download successful${NC}"
             return 0
         fi
@@ -60,6 +70,9 @@ download_with_retry() {
     handle_error "Failed to download after $retries attempts: $url"
 }
 
+# ------------------------------------------------------------
+# Verify file is non‑empty
+# ------------------------------------------------------------
 verify_download() {
     local file="$1"
     if [[ ! -f "$file" || ! -s "$file" ]]; then
@@ -68,7 +81,91 @@ verify_download() {
     echo -e "${GREEN}✅ File verified: $(du -h "$file" | cut -f1)${NC}"
 }
 
-# ======================== KERNEL CLONE ========================
+# ------------------------------------------------------------
+# Smart extract with retry and integrity check
+# ------------------------------------------------------------
+extract_with_retry() {
+    local archive="$1"
+    local dest="$2"
+    local max_attempts=2
+    local attempt=1
+
+    # Detect archive type
+    local ext="${archive##*.}"
+    local base="${archive%.*}"
+
+    while [[ $attempt -le $max_attempts ]]; do
+        echo -e "${CYAN}📦 Extracting (attempt $attempt/$max_attempts)...${NC}"
+
+        # ---- Check integrity before extraction ----
+        local ok=0
+        case "$archive" in
+            *.tar.gz|*.tgz)
+                if gzip -t "$archive" 2>/dev/null; then
+                    ok=1
+                else
+                    echo -e "${YELLOW}⚠️ gzip integrity check failed${NC}"
+                fi
+                ;;
+            *.tar.zst)
+                if command -v zstd &>/dev/null && zstd -t "$archive" 2>/dev/null; then
+                    ok=1
+                else
+                    echo -e "${YELLOW}⚠️ zstd integrity check failed${NC}"
+                fi
+                ;;
+            *)
+                # No check, assume ok
+                ok=1
+                ;;
+        esac
+
+        if [[ $ok -eq 0 ]]; then
+            echo -e "${YELLOW}⚠️ Archive appears corrupt.${NC}"
+        else
+            # ---- Perform extraction ----
+            local extract_cmd
+            case "$archive" in
+                *.tar.gz|*.tgz)
+                    extract_cmd="tar -xzf \"$archive\" -C \"$dest\""
+                    ;;
+                *.tar.zst)
+                    extract_cmd="tar -I zstd -xf \"$archive\" -C \"$dest\" --strip-components=1"
+                    ;;
+                *)
+                    handle_error "Unsupported archive format: $archive"
+                    ;;
+            esac
+
+            if eval "$extract_cmd" 2>&1; then
+                echo -e "${GREEN}✅ Extraction successful${NC}"
+                return 0
+            else
+                echo -e "${YELLOW}⚠️ Extraction command failed.${NC}"
+            fi
+        fi
+
+        # ---- If we reach here, extraction failed ----
+        if [[ $attempt -lt $max_attempts ]]; then
+            echo -e "${BLUE}🔄 Re‑downloading archive (attempt $((attempt+1))/$max_attempts)...${NC}"
+            rm -f "$archive"
+            # We need the original URL – we pass it via a global or re‑download
+            # To keep it generic, we expect the caller to set DOWNLOAD_URL variable
+            if [[ -z "$DOWNLOAD_URL" ]]; then
+                handle_error "DOWNLOAD_URL not set, cannot re‑download."
+            fi
+            download_with_retry "$DOWNLOAD_URL" "$(basename "$archive")"
+            verify_download "$archive"
+        fi
+        ((attempt++))
+    done
+
+    handle_error "Extraction failed after $max_attempts attempts"
+}
+
+# ============================================================
+# 1. KERNEL CLONE
+# ============================================================
 echo -e "${MAGENTA}📥 Step 1: Cloning Kernel Sources...${NC}"
 if git clone --depth=1 --recurse-submodules --shallow-submodules \
     --branch "$KERNEL_BRANCH" \
@@ -86,7 +183,9 @@ fi
 
 echo ""
 
-# ======================== TOOLCHAIN ========================
+# ============================================================
+# 2. TOOLCHAIN SETUP
+# ============================================================
 if [[ "${USE_GCC:-false}" == "true" ]]; then
     # -------- GCC build (no Clang) --------
     echo -e "${MAGENTA}🔧 Step 2: Setting up GCC toolchain...${NC}"
@@ -109,16 +208,20 @@ else
         "aosp")
             log_info "Using AOSP Clang toolchain"
             local_archive_name="aosp-clang.tar.gz"
+            DOWNLOAD_URL="$AOSP_CLANG_URL"   # for re‑download in extract_with_retry
+            export DOWNLOAD_URL
+
             if ! curl --head --silent --fail "$AOSP_CLANG_URL" > /dev/null; then
                 handle_error "AOSP Clang URL not accessible: $AOSP_CLANG_URL"
             fi
+
             download_with_retry "$AOSP_CLANG_URL" "$local_archive_name"
             verify_download "$TEMP_DIR/$local_archive_name"
-            echo -e "${CYAN}📁 Extracting AOSP toolchain...${NC}"
-            tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract AOSP toolchain"
 
-            # For AOSP clang we also need GCC cross compilers (but we may already have them)
-            # They are required for proper linking; download them as well.
+            echo -e "${CYAN}📁 Extracting AOSP toolchain...${NC}"
+            extract_with_retry "$TEMP_DIR/$local_archive_name" "$CLANG_ROOTDIR"
+
+            # For AOSP clang we also need GCC cross compilers
             log_info "Cloning GCC64 toolchain (required for AOSP clang build)..."
             git clone --depth=1 --branch "$GCC64_BRANCH" "$GCC64_URL" "$GCC64_ROOTDIR" || handle_error "Failed to clone GCC64"
             log_info "Cloning GCC32 toolchain (required for AOSP clang build)..."
@@ -127,21 +230,22 @@ else
 
         "greenforce")
             log_info "Using Greenforce Clang toolchain"
-            # Fetch the script that exports LATEST_URL. Use source instead of eval for safety.
-            # We'll download the script and then source it to get the variable.
             GREENFORCE_SCRIPT=$(mktemp)
             curl -sL --fail "https://raw.githubusercontent.com/greenforce-project/greenforce_clang/refs/heads/main/get_latest_url.sh" -o "$GREENFORCE_SCRIPT" || handle_error "Failed to fetch Greenforce script"
-            # Source the script; it should set LATEST_URL
             source "$GREENFORCE_SCRIPT" || handle_error "Failed to source Greenforce script"
             rm -f "$GREENFORCE_SCRIPT"
             if [[ -z "$LATEST_URL" ]]; then
                 handle_error "LATEST_URL not set after sourcing Greenforce script"
             fi
             local_archive_name="greenforce-clang.tar.gz"
+            DOWNLOAD_URL="$LATEST_URL"
+            export DOWNLOAD_URL
+
             download_with_retry "$LATEST_URL" "$local_archive_name"
             verify_download "$TEMP_DIR/$local_archive_name"
+
             echo -e "${CYAN}📁 Extracting Greenforce toolchain...${NC}"
-            tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract Greenforce toolchain"
+            extract_with_retry "$TEMP_DIR/$local_archive_name" "$CLANG_ROOTDIR"
             ;;
 
         "neutron")
@@ -158,12 +262,14 @@ else
             log_info "Found asset: $ASSET_URL"
 
             local_archive_name="neutron-clang.tar.zst"
+            DOWNLOAD_URL="$ASSET_URL"
+            export DOWNLOAD_URL
+
             download_with_retry "$ASSET_URL" "$local_archive_name"
             verify_download "$TEMP_DIR/$local_archive_name"
 
             echo -e "${CYAN}📁 Extracting Neutron toolchain (zstd)...${NC}"
-            # Use --strip-components=1 to avoid extra directory level
-            tar -I zstd -xf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" --strip-components=1 || handle_error "Failed to extract Neutron toolchain"
+            extract_with_retry "$TEMP_DIR/$local_archive_name" "$CLANG_ROOTDIR"
 
             # Verify clang binary
             if [[ ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
@@ -179,10 +285,14 @@ else
             fi
             local_archive_name="zyc-clang.tar.gz"
             download_url="https://github.com/ZyCromerZ/Clang/releases/download/${ZYC_VERSION}-release/Clang-${ZYC_VERSION}.tar.gz"
+            DOWNLOAD_URL="$download_url"
+            export DOWNLOAD_URL
+
             download_with_retry "$download_url" "$local_archive_name"
             verify_download "$TEMP_DIR/$local_archive_name"
+
             echo -e "${CYAN}📁 Extracting ZyCromerZ toolchain...${NC}"
-            tar -xzf "$TEMP_DIR/$local_archive_name" -C "$CLANG_ROOTDIR" || handle_error "Failed to extract ZyC clang"
+            extract_with_retry "$TEMP_DIR/$local_archive_name" "$CLANG_ROOTDIR"
             ;;
 
         *)
@@ -191,6 +301,9 @@ else
     esac
 fi
 
+# ============================================================
+# Final summary
+# ============================================================
 echo ""
 echo -e "${GREEN}"
 echo "╔═══════════════════════════════════════╗"
