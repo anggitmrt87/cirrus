@@ -41,6 +41,9 @@ declare -g ANYKERNEL_DIR
 declare -g DEVICE_CODENAME
 declare -g DEVICE_DEFCONFIG
 
+# Direktori tempat skrip ini berada
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Redirect all output to log file AND console
 exec > >(tee -a "$BUILD_LOG") 2>&1
 
@@ -365,6 +368,7 @@ configure_defconfig() {
         return 1
     }
 
+    # Merge fragment dari DEVICE_DEFCONFIG
     for frag in "${fragments[@]}"; do
         local frag_path="arch/$ARCH/configs/$frag"
         if [[ -f "$frag_path" ]]; then
@@ -378,7 +382,24 @@ configure_defconfig() {
         fi
     done
 
-    if [[ ${#fragments[@]} -gt 0 ]]; then
+    # Merge config eksternal jika GENERATE_NEW_CONFIG=true
+    local external_config="$SCRIPT_DIR/config/android-base.config"
+    local merge_external=false
+    if [[ "${GENERATE_NEW_CONFIG:-false}" == "true" ]]; then
+        if [[ -f "$external_config" ]]; then
+            log_info "Merging external config: $external_config"
+            scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$KERNEL_OUTDIR/.config" "$external_config" || {
+                log_error "Failed to merge external config: $external_config"
+                return 1
+            }
+            merge_external=true
+        else
+            log_warning "GENERATE_NEW_CONFIG=true tetapi file $external_config tidak ditemukan, dilewati."
+        fi
+    fi
+
+    # Jalankan olddefconfig jika ada fragment atau external config yang di-merge
+    if [[ ${#fragments[@]} -gt 0 || "$merge_external" == "true" ]]; then
         make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION || {
             log_error "Failed to update defconfig after merge."
             return 1
