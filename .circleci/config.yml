@@ -58,9 +58,6 @@ jobs:
 
       # Optimization
       BUILD_OPTIONS: "-j8"
-      CCACHE: "true"
-      CCACHE_DIR: "/tmp/ccache"
-      CCACHE_MAXSIZE: "10G"
 
       # Logging
       DEBUG_MODE: "false"
@@ -71,12 +68,6 @@ jobs:
     steps:
       - checkout
 
-      - restore_cache:
-          keys:
-            - ccache-{{ checksum "build.sh" }}-{{ .Branch }}
-            - ccache-{{ checksum "build.sh" }}
-            - ccache-
-
       - run:
           name: "🔄 Update System & Install Dependencies"
           command: |
@@ -84,7 +75,7 @@ jobs:
             apt-get install sudo -y
             sudo apt-get update -qq
             sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y aria2 ccache libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo6 jq zstd python3-pip python3-venv pipx libxml2* libxml2-dev
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y aria2 libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo6 jq zstd python3-pip python3-venv pipx libxml2* libxml2-dev
             pipx ensurepath
             export PATH="$HOME/.local/bin:$PATH"
             pipx install telegram-send
@@ -105,11 +96,6 @@ jobs:
             chmod +x build.sh
             ./build.sh
           no_output_timeout: 3h
-
-      - save_cache:
-          key: ccache-{{ checksum "build.sh" }}-{{ .Branch }}
-          paths:
-            - /tmp/ccache
 
 workflows:
   version: 2

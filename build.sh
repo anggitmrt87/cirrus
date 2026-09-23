@@ -52,9 +52,6 @@ exec > >(tee -a "$BUILD_LOG") 2>&1
 # ------------------------------------------------------------------------------
 check_dependencies() {
     local deps=("curl" "git" "make" "zip")
-    if [[ "${CCACHE:-false}" == "true" ]]; then
-        deps+=("ccache")
-    fi
     for cmd in "${deps[@]}"; do
         if ! command -v "$cmd" &>/dev/null; then
             log_error "Missing required command: $cmd"
@@ -108,18 +105,6 @@ setup_toolchain() {
         export COMPILER_OPTION="CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
         export KBUILD_COMPILER_STRING="$(${BUILD_CROSS_COMPILE}gcc --version | head -n1)"
         log_info "Using GCC toolchain: $KBUILD_COMPILER_STRING"
-
-        if [[ "${CCACHE:-false}" == "true" ]]; then
-            export USE_CCACHE=1
-            export CCACHE_EXEC=$(which ccache)
-            export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
-            export PATH="/usr/lib/ccache:$PATH"
-            ccache -o compression=true
-            ccache -o compression_level=1
-            ccache -o max_size="$CCACHE_MAXSIZE"
-            ccache -z
-            log_info "CCache enabled: $CCACHE_DIR (max: $CCACHE_MAXSIZE)"
-        fi
     else
         # -------- Clang build --------
         if [[ ! -d "$CLANG_ROOTDIR" || ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
@@ -132,19 +117,7 @@ setup_toolchain() {
         export LLD_VER="$("$bin_dir/ld.lld" --version | head -n1)"
         export KBUILD_COMPILER_STRING="$CLANG_VER with $LLD_VER"
 
-        if [[ "${CCACHE:-false}" == "true" ]]; then
-            export USE_CCACHE=1
-            export CCACHE_EXEC=$(which ccache)
-            export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-2G}"
-            export PATH="/usr/lib/ccache:$CLANG_ROOTDIR/bin:${PATH}"
-            ccache -o compression=true
-            ccache -o compression_level=1
-            ccache -o max_size="$CCACHE_MAXSIZE"
-            ccache -z
-            log_info "CCache enabled: $CCACHE_DIR (max: $CCACHE_MAXSIZE)"
-        else
-            export PATH="$CLANG_ROOTDIR/bin:${PATH}"
-        fi
+        export PATH="$CLANG_ROOTDIR/bin:${PATH}"
 
         if [[ "${USE_CLANG:-}" == "aosp" ]]; then
             if [[ ! -d "$GCC32_ROOTDIR" || ! -d "$GCC64_ROOTDIR" ]]; then
