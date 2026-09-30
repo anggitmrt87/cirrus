@@ -51,8 +51,8 @@ jobs:
 
       # KernelSU
       KERNELSU: "true"
-      KERNELSU_TYPE: "all"
-      KERNELSU_BRANCH: "hookless"
+      KERNELSU_TYPE: "resukisu"
+      KERNELSU_BRANCH: "main"
       KPM_PATCH: "false"
       KPM_VERSION: "0.13.0"
 
