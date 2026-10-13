@@ -279,11 +279,12 @@ install_kernelsu() {
 
     local url=""
     case "${KERNELSU_TYPE:-}" in
-        sukisu)       url="https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/refs/heads/main/kernel/setup.sh" ;;
-        resukisu)     url="https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/refs/heads/main/kernel/setup.sh" ;;
+        sukisu)       url="https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" ;;
+        resukisu)     url="https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" ;;
         rksu)         url="https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" ;;
-        kernelsunext) url="https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/dev/kernel/setup.sh" ;;
-        backslashxx)  url="https://raw.githubusercontent.com/backslashxx/KernelSU/refs/heads/master/kernel/setup.sh" ;;
+        mambosu)      url="https://raw.githubusercontent.com/RapliVx/KernelSU/master/kernel/setup.sh" ;;
+        kernelsunext) url="https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/dev/kernel/setup.sh" ;;
+        backslashxx)  url="https://raw.githubusercontent.com/backslashxx/KernelSU/master/kernel/setup.sh" ;;
         all)          url="https://raw.githubusercontent.com/Sorayukii/KernelSU-Next/stable/kernel/setup.sh" ;;
         *)            log_warning "Invalid KERNELSU_TYPE: '$KERNELSU_TYPE', skipping."; return 1 ;;
     esac
