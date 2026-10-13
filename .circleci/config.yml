@@ -20,7 +20,7 @@ jobs:
       BUILD_HOST: "mrtproject™"
       KERNEL_NAME: "Reborn-kernel"
       KERNEL_SOURCE: "https://anggitmrt87:$GIT_TOKEN@github.com/MRT-project/kernel_xiaomi_chime_sm6115"
-      KERNEL_BRANCH: "susfs-2.3.0"
+      KERNEL_BRANCH: "hyperos"
       ANYKERNEL: "https://github.com/anggitmrt87/AnyKernel3.git"
       ANYKERNEL_BRANCH: "master"
       ARCH: "arm64"
@@ -51,7 +51,7 @@ jobs:
 
       # KernelSU
       KERNELSU: "true"
-      KERNELSU_TYPE: "mambosu"
+      KERNELSU_TYPE: "backslashxx"
       KERNELSU_BRANCH: "master"
       KPM_PATCH: "false"
       KPM_VERSION: "0.13.0"
