@@ -230,7 +230,6 @@ send_failure_log() {
             # Send file without caption (caption plain text only)
             telegram-send --file "$log_file" || log_warning "Failed to send error log"
             # Send a separate message with details (HTML)
-            # Menggunakan newline literal
             tg_post_msg "❌ <b>Kernel Build Failed</b>
 📱 Device: <code>$DEVICE_CODENAME</code>
 🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')
@@ -271,7 +270,7 @@ cleanup() {
 }
 
 # ------------------------------------------------------------------------------
-# 🔧 Feature installation (KernelSU, KPM)
+# 🔧 Feature installation (KernelSU, KPM, NoMount)
 # ------------------------------------------------------------------------------
 install_kernelsu() {
     cd "$KERNEL_ROOTDIR"
@@ -295,6 +294,24 @@ install_kernelsu() {
         return 1
     fi
     log_success "KernelSU installed."
+}
+
+install_nomount() {
+    cd "$KERNEL_ROOTDIR"
+    [[ "${INCLUDE_NOMOUNT:-false}" != "true" ]] && { log_info "NoMount disabled, skipping."; return 0; }
+
+    log_info "Installing NoMount (maxsteeel/nomount)..."
+    if ! timeout 300 bash -c "curl -LSs 'https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh' | bash -s master"; then
+        log_warning "NoMount installation failed, continuing without it."
+        return 1
+    fi
+
+    # Verifikasi patch berhasil
+    if [[ ! -L "fs/nomount" ]] && [[ ! -d "fs/nomount" ]]; then
+        log_warning "NoMount symlink not found after setup, patch may have failed."
+        return 1
+    fi
+    log_success "NoMount installed."
 }
 
 patch_kpm() {
@@ -394,6 +411,20 @@ configure_defconfig() {
         make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
         log_success "LOCALVERSION_AUTO disabled."
     fi
+
+    # Enable NoMount if requested
+    if [[ "${INCLUDE_NOMOUNT:-false}" == "true" ]]; then
+        log_info "Enabling CONFIG_NOMOUNT=y"
+        if [[ -f "scripts/config" ]]; then
+            scripts/config --file "$KERNEL_OUTDIR/.config" --enable NOMOUNT
+        else
+            if ! grep -q "^CONFIG_NOMOUNT=y" "$KERNEL_OUTDIR/.config"; then
+                echo "CONFIG_NOMOUNT=y" >> "$KERNEL_OUTDIR/.config"
+            fi
+        fi
+        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
+        log_success "CONFIG_NOMOUNT enabled."
+    fi
 }
 
 compile_kernel() {
@@ -488,6 +519,11 @@ generate_caption() {
         kpm_status="✅ v${KPM_VERSION}"
     fi
 
+    local nomount_status="❌ Disabled"
+    if [[ "${INCLUDE_NOMOUNT:-false}" == "true" ]]; then
+        nomount_status="✅ Enabled (maxsteeel/nomount)"
+    fi
+
     local commit_link=""
     if [[ -n "$KERNEL_SOURCE_SHORT" && -n "$COMMIT_HASH" ]]; then
         commit_link="🔗 <a href=\"https://github.com/$KERNEL_SOURCE_SHORT/commit/$COMMIT_HASH\">View Commit</a>"
@@ -515,6 +551,7 @@ generate_caption() {
 
 🔧 <b>KernelSU:</b> $kernelsu_status
 📦 <b>KPM Patch:</b> $kpm_status
+🚫 <b>NoMount:</b> $nomount_status
 
 $changelog
 
@@ -635,7 +672,6 @@ build_single_device() {
     setup_toolchain
     setup_build_vars
 
-    # Menggunakan newline literal, bukan %0A
     tg_post_msg "🚀 <b>Kernel Build Started for $DEVICE_CODENAME</b>
 
 📱 Device: <code>$DEVICE_CODENAME</code>
@@ -643,6 +679,7 @@ build_single_device() {
 🔧 Toolchain: <code>${KBUILD_COMPILER_STRING:-N/A}</code>"
 
     install_kernelsu
+    install_nomount
     configure_defconfig || return 1
     make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
     compile_kernel || return 1

@@ -53,6 +53,7 @@ jobs:
       KERNELSU: "true"
       KERNELSU_TYPE: "backslashxx"
       KERNELSU_BRANCH: "master"
+      INCLUDE_NOMOUNT: "true"
       KPM_PATCH: "false"
       KPM_VERSION: "0.13.0"
 
