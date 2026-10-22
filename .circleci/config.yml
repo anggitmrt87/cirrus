@@ -47,7 +47,7 @@ jobs:
       DISABLE_LOCALVERSION_ST: "true"
       INCLUDE_DTB: "true"
       DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
-      GENERATE_NEW_CONFIG: "true"
+      GENERATE_NEW_CONFIG: "false"
 
       # KernelSU
       KERNELSU: "true"
