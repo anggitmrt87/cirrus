@@ -547,11 +547,6 @@ generate_caption() {
     cat <<EOF
 ✨ <b>🚀 KERNEL BUILD SUCCESSFULLY!</b> ✨
 
-📱 <b>Device:</b> <code>$DEVICE_CODENAME</code>
-📦 <b>Kernel:</b> <code>$KERNEL_NAME</code>
-🌿 <b>Branch:</b> <code>${BRANCH:-N/A}</code>
-🔖 <b>Commit:</b> <code>${COMMIT_HASH:-N/A}</code> - ${LATEST_COMMIT:-N/A}
-👤 <b>Author:</b> ${COMMIT_BY:-N/A}
 ⚙️ <b>Defconfig:</b> <code>$DEVICE_DEFCONFIG</code>
 🛠️ <b>Compiler:</b> <code>${KBUILD_COMPILER_STRING:-N/A}</code>
 📅 <b>Build Date:</b> $build_date
@@ -564,8 +559,6 @@ generate_caption() {
 🚫 <b>NoMount:</b> $nomount_status
 
 $changelog
-
-$commit_link | <a href="https://t.me/HyperOS_chime">Channel</a>
 
 🎉 <b>Ready to flash!</b>
 EOF
