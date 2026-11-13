@@ -543,12 +543,7 @@ generate_caption() {
 ⏱️ <b>Build Time:</b> $build_time_str
 🔧 <b>Kernel Version:</b> <code>${KERNEL_VERSION:-N/A}</code>
 
-📊 <b>File Info:</b>
-📏 Size: $zip_size
-🔐 MD5: <code>${zip_md5:0:16}...</code>
-🔑 SHA1: <code>${zip_sha1:0:16}...</code>
-🔒 SHA256: <code>${zip_sha256:0:16}...</code>
-
+📏 <b>Size:</b> $zip_size
 🔧 <b>KernelSU:</b> $kernelsu_status
 📦 <b>KPM Patch:</b> $kpm_status
 🚫 <b>NoMount:</b> $nomount_status
@@ -590,21 +585,12 @@ create_and_upload_zip() {
     local upload_success=false
     for i in {1..3}; do
         if command -v telegram-send &>/dev/null; then
-            # Send file with plain text caption (just file name) and then send detailed message
-            if telegram-send --file "$zip_name" --caption "Kernel zip: $zip_name"; then
+            if telegram-send --file "$zip_name" --caption "$caption"; then
                 upload_success=true
-                # Send detailed HTML message
-                tg_post_msg "$caption"
                 break
             fi
         else
-            # Fallback: send file with full HTML caption via curl
-            if curl -F document=@"$zip_name" -F filename="$zip_name" "$BOT_DOC_URL" \
-                 -F chat_id="$TG_CHAT_ID" \
-                 -F "disable_web_page_preview=true" \
-                 -F "parse_mode=html" \
-                 -F caption="$caption" \
-                 --fail --show-error --max-time 600; then
+            if telegram-send --file "$zip_name"; then
                 upload_success=true
                 break
             fi
