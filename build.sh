@@ -425,6 +425,21 @@ configure_defconfig() {
         make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
         log_success "CONFIG_NOMOUNT enabled."
     fi
+
+    # Enable NoMount if requested
+    if [[ "${DISABLE_CLANG_LTO:-false}" == "true" ]]; then
+        log_info "DISABLE CLANG LTO"
+        if [[ -f "scripts/config" ]]; then
+            scripts/config --file "$KERNEL_OUTDIR/.config" --disable CONFIG_LTO_CLANG
+            scripts/config --file "$KERNEL_OUTDIR/.config" --disable CONFIG_CFI_CLANG
+            scripts/config --file "$KERNEL_OUTDIR/.config" --disable CONFIG_LTO
+            scripts/config --file "$KERNEL_OUTDIR/.config" --enable CONFIG_LTO_NONE
+        else
+            log_error "Disable LTO failed."
+        fi
+        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
+        log_success "LTO disable."
+    fi
 }
 
 compile_kernel() {
