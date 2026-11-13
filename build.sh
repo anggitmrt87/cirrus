@@ -593,7 +593,7 @@ create_and_upload_zip() {
     local upload_success=false
     for i in {1..3}; do
         if command -v telegram-send &>/dev/null; then
-            if telegram-send --file "$zip_name" --caption "$caption"; then
+            if telegram-send --format html --file "$zip_name" --caption "$caption"; then
                 upload_success=true
                 break
             fi
