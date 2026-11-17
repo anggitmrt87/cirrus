@@ -59,7 +59,7 @@ jobs:
       KPM_VERSION: "0.13.0"
 
       # Optimization
-      BUILD_OPTIONS: "-j8"
+      BUILD_OPTIONS: "-j4"
 
       # Logging
       DEBUG_MODE: "false"
