@@ -82,13 +82,13 @@ jobs:
       - run:
           name: "🔄 Install dependencies"
           command: |
-            sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y \
               aria2 libssl-dev libelf-dev bc flex bison cpio xz-utils kmod rsync \
               locales libtinfo6 jq zstd python3-pip python3-venv pipx \
               libxml2 libxml2-dev ccache build-essential libncurses-dev \
               device-tree-compiler wget curl git \
-              gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+              gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi sudo
             pipx ensurepath
             export PATH="$HOME/.local/bin:$PATH"
             pipx install telegram-send || pipx upgrade telegram-send
