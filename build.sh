@@ -40,6 +40,7 @@ declare -g KERNEL_OUTDIR
 declare -g ANYKERNEL_DIR
 declare -g DEVICE_CODENAME
 declare -g DEVICE_DEFCONFIG
+declare -ga COMPILER_OPTION=()
 
 # Direktori tempat skrip ini berada
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,11 +52,11 @@ exec > >(tee -a "$BUILD_LOG") 2>&1
 # 🛠️  Helper functions
 # ------------------------------------------------------------------------------
 check_dependencies() {
-    local deps=("curl" "git" "make" "zip")
+    local deps=("curl" "git" "make" "zip" "ccache")
     for cmd in "${deps[@]}"; do
         if ! command -v "$cmd" &>/dev/null; then
-            log_error "Missing required command: $cmd"
-            exit 1
+            log_warning "Missing recommended command: $cmd"
+            [[ "$cmd" == "ccache" ]] || exit 1
         fi
     done
 }
@@ -93,6 +94,8 @@ setup_directories() {
 }
 
 setup_toolchain() {
+    COMPILER_OPTION=()
+
     if [[ "${USE_GCC:-false}" == "true" ]]; then
         # -------- GCC build --------
         if [[ ! -d "$GCC64_ROOTDIR" || ! -d "$GCC32_ROOTDIR" ]]; then
@@ -102,7 +105,10 @@ setup_toolchain() {
         export PATH="$GCC64_ROOTDIR/bin:$GCC32_ROOTDIR/bin:$PATH"
         export BUILD_CROSS_COMPILE="aarch64-linux-android-"
         export BUILD_CROSS_COMPILE_ARM32="arm-linux-androideabi-"
-        export COMPILER_OPTION="CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
+        COMPILER_OPTION=(
+            "CROSS_COMPILE=$BUILD_CROSS_COMPILE"
+            "CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
+        )
         export KBUILD_COMPILER_STRING="$(${BUILD_CROSS_COMPILE}gcc --version | head -n1)"
         log_info "Using GCC toolchain: $KBUILD_COMPILER_STRING"
     else
@@ -119,40 +125,62 @@ setup_toolchain() {
 
         export PATH="$CLANG_ROOTDIR/bin:${PATH}"
 
+        # Cross-compile prefixes (sesuai perintah build yang diminta)
+        export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
+        export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+        export BUILD_CROSS_COMPILE_COMPAT="arm-linux-gnueabi-"
+        export BUILD_CLANG_TRIPLE="aarch64-linux-gnu-"
+
+        # AOSP clang biasanya butuh GCC cross-compiler untuk beberapa tool non-LLVM
         if [[ "${USE_CLANG:-}" == "aosp" ]]; then
             if [[ ! -d "$GCC32_ROOTDIR" || ! -d "$GCC64_ROOTDIR" ]]; then
                 log_error "GCC toolchains missing for AOSP build"
                 exit 1
             fi
             export PATH="$GCC32_ROOTDIR/bin:$GCC64_ROOTDIR/bin:$PATH"
-            export BUILD_CROSS_COMPILE="aarch64-linux-android-"
-            export BUILD_CROSS_COMPILE_ARM32="arm-linux-androideabi-"
-            if [[ "${ARCH:-}" == "arm64" ]]; then
-                export BUILD_CLANG_TRIPLE="aarch64-linux-gnu-"
-            elif [[ "${ARCH:-}" == "arm" ]]; then
-                export BUILD_CLANG_TRIPLE="arm-linux-gnueabi-"
-            fi
-            export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32 CLANG_TRIPLE=$BUILD_CLANG_TRIPLE"
-        elif [[ "${USE_CLANG:-}" == "zyc" ]]; then
-            export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
-            export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
-            if [[ "${ARCH:-}" == "arm64" ]]; then
-                export BUILD_CLANG_TRIPLE="aarch64-linux-gnu-"
-            elif [[ "${ARCH:-}" == "arm" ]]; then
-                export BUILD_CLANG_TRIPLE="arm-linux-gnueabi-"
-            fi
-            export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32 CLANG_TRIPLE=$BUILD_CLANG_TRIPLE"
-        else
-            export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
-            export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
-            export COMPILER_OPTION="LLVM=1 LLVM_IAS=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip CROSS_COMPILE=$BUILD_CROSS_COMPILE CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
         fi
+
+        # Siapkan CC (pakai ccache bila tersedia)
+        local cc_value="clang"
+        if command -v ccache &>/dev/null; then
+            cc_value="ccache clang"
+        else
+            log_warning "ccache tidak ditemukan, build akan memakai plain clang (CC=clang)."
+        fi
+
+        COMPILER_OPTION=(
+            "CC=$cc_value"
+            "AR=llvm-ar"
+            "NM=llvm-nm"
+            "LD=ld.lld -S"
+            "OBJCOPY=llvm-objcopy"
+            "OBJDUMP=llvm-objdump"
+            "STRIP=llvm-strip"
+            "CLANG_TRIPLE=$BUILD_CLANG_TRIPLE"
+            "CROSS_COMPILE=$BUILD_CROSS_COMPILE"
+            "CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
+            "CROSS_COMPILE_COMPAT=$BUILD_CROSS_COMPILE_COMPAT"
+            "LLVM=1"
+            "LLVM_IAS=1"
+            "INSTALL_MOD_STRIP=1"
+        )
     fi
 }
 
+# Wrapper make yang selalu membawa COMPILER_OPTION
+kbuild() {
+    make "$@" "${COMPILER_OPTION[@]}"
+}
+
 setup_build_vars() {
-    export KBUILD_BUILD_USER="$BUILD_USER"
-    export KBUILD_BUILD_HOST="$BUILD_HOST"
+    # KBUILD_BUILD_USER dari short commit, KBUILD_BUILD_HOST dari nama branch
+    local git_user git_host
+    git_user="$(git -C "$KERNEL_ROOTDIR" rev-parse --short HEAD 2>/dev/null | cut -c1-7 || true)"
+    git_host="$(git -C "$KERNEL_ROOTDIR" symbolic-ref --short HEAD 2>/dev/null || true)"
+
+    export KBUILD_BUILD_USER="${git_user:-${BUILD_USER:-builder}}"
+    export KBUILD_BUILD_HOST="${git_host:-${BUILD_HOST:-localhost}}"
+
     export IMAGE="$KERNEL_OUTDIR/arch/arm64/boot/${TYPE_IMAGE:-Image.gz}"
     export DTBO="$KERNEL_OUTDIR/arch/arm64/boot/dtbo.img"
     export DTB="$KERNEL_OUTDIR/${DTB_PATH:-}"
@@ -163,13 +191,13 @@ setup_build_vars() {
         export BUILD_OPTIONS="-j$NUM_CORES"
     fi
     log_info "Build options: $BUILD_OPTIONS"
+    log_info "KBUILD_BUILD_USER=$KBUILD_BUILD_USER | KBUILD_BUILD_HOST=$KBUILD_BUILD_HOST"
 }
 
 setup_telegram() {
     export PATH="$HOME/.local/bin:$PATH"
     export TELEGRAM_TOKEN="$TG_TOKEN"
     export TELEGRAM_CHAT_ID="$TG_CHAT_ID"
-    # Create config file for telegram-send
     mkdir -p "$HOME/.config"
     cat > "$HOME/.config/telegram-send.conf" <<EOF
 [telegram]
@@ -187,7 +215,6 @@ tg_post_msg() {
     local message="$1"
     local parse_mode="${2:-html}"
     if command -v telegram-send &>/dev/null; then
-        # telegram-send uses --format for parse mode
         telegram-send --format html "$message" || log_warning "Failed to send message via telegram-send"
     else
         curl -s -X POST "$BOT_MSG_URL" \
@@ -200,7 +227,6 @@ tg_post_msg() {
 
 tg_send_sticker() {
     local sticker_id="$1"
-    # telegram-send can't send by sticker ID directly, so we keep using curl
     curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendSticker" \
         -d sticker="$sticker_id" \
         -d chat_id="$TG_CHAT_ID" >/dev/null || log_warning "Failed to send sticker"
@@ -227,15 +253,12 @@ send_failure_log() {
     if [[ -f "$log_file" ]]; then
         local doc_name="build_error_${DEVICE_CODENAME}_$(date +%s).log"
         if command -v telegram-send &>/dev/null; then
-            # Send file without caption (caption plain text only)
             telegram-send --file "$log_file" || log_warning "Failed to send error log"
-            # Send a separate message with details (HTML)
             tg_post_msg "❌ <b>Kernel Build Failed</b>
 📱 Device: <code>$DEVICE_CODENAME</code>
 🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')
 🔢 Exit Code: $exit_code"
         else
-            # Fallback to curl with caption HTML
             local caption="❌ <b>Kernel Build Failed</b>
 📱 Device: <code>$DEVICE_CODENAME</code>
 🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')
@@ -306,7 +329,6 @@ install_nomount() {
         return 1
     fi
 
-    # Verifikasi patch berhasil
     if [[ ! -L "fs/nomount" ]] && [[ ! -d "fs/nomount" ]]; then
         log_warning "NoMount symlink not found after setup, patch may have failed."
         return 1
@@ -355,12 +377,11 @@ configure_defconfig() {
     local fragments=("${defconfig_array[@]:1}")
 
     log_info "Primary defconfig: $primary"
-    make "$BUILD_OPTIONS" ARCH="$ARCH" "$primary" O="$KERNEL_OUTDIR" $COMPILER_OPTION || {
+    kbuild $BUILD_OPTIONS ARCH="$ARCH" "$primary" O="$KERNEL_OUTDIR" || {
         log_error "Primary defconfig failed."
         return 1
     }
 
-    # Merge fragment dari DEVICE_DEFCONFIG
     for frag in "${fragments[@]}"; do
         local frag_path="arch/$ARCH/configs/$frag"
         if [[ -f "$frag_path" ]]; then
@@ -374,7 +395,6 @@ configure_defconfig() {
         fi
     done
 
-    # Merge config eksternal jika GENERATE_NEW_CONFIG=true
     local external_config="$SCRIPT_DIR/config/android-base.config"
     local merge_external=false
     if [[ "${GENERATE_NEW_CONFIG:-false}" == "true" ]]; then
@@ -390,15 +410,14 @@ configure_defconfig() {
         fi
     fi
 
-    # Jalankan olddefconfig jika ada fragment atau external config yang di-merge
     if [[ ${#fragments[@]} -gt 0 || "$merge_external" == "true" ]]; then
-        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION || {
+        kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" || {
             log_error "Failed to update defconfig after merge."
             return 1
         }
     fi
 
-    make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" $COMPILER_OPTION savedefconfig
+    kbuild $BUILD_OPTIONS ARCH="$ARCH" O="$KERNEL_OUTDIR" savedefconfig
 
     if [[ "${DISABLE_LOCALVERSION_ST:-false}" == "true" ]]; then
         log_info "Disabling LOCALVERSION_AUTO and clearing LOCALVERSION"
@@ -408,11 +427,10 @@ configure_defconfig() {
             log_warning "scripts/config not found, using sed directly"
             sed -i 's/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/g' "$KERNEL_OUTDIR/.config"
         fi
-        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
+        kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR"
         log_success "LOCALVERSION_AUTO disabled."
     fi
 
-    # Enable NoMount if requested
     if [[ "${INCLUDE_NOMOUNT:-false}" == "true" ]]; then
         log_info "Enabling CONFIG_NOMOUNT=y"
         if [[ -f "scripts/config" ]]; then
@@ -422,11 +440,10 @@ configure_defconfig() {
                 echo "CONFIG_NOMOUNT=y" >> "$KERNEL_OUTDIR/.config"
             fi
         fi
-        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
+        kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR"
         log_success "CONFIG_NOMOUNT enabled."
     fi
 
-    # Enable NoMount if requested
     if [[ "${DISABLE_CLANG_LTO:-false}" == "true" ]]; then
         log_info "DISABLE CLANG LTO"
         if [[ -f "scripts/config" ]]; then
@@ -437,7 +454,7 @@ configure_defconfig() {
         else
             log_error "Disable LTO failed."
         fi
-        make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
+        kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR"
         log_success "LTO disable."
     fi
 }
@@ -449,7 +466,7 @@ compile_kernel() {
     local targets=("$TYPE_IMAGE")
     [[ "${BUILD_DTBO:-false}" == "true" ]] && targets+=("dtbo.img")
 
-    if ! make "$BUILD_OPTIONS" ARCH="$ARCH" O="$KERNEL_OUTDIR" $COMPILER_OPTION "${targets[@]}"; then
+    if ! kbuild $BUILD_OPTIONS ARCH="$ARCH" O="$KERNEL_OUTDIR" "${targets[@]}"; then
         log_error "Kernel compilation failed."
         return 1
     fi
@@ -586,7 +603,6 @@ create_and_upload_zip() {
     local zip_md5=$(md5sum "$zip_name" | cut -d' ' -f1)
     local zip_sha256=$(sha256sum "$zip_name" | cut -d' ' -f1)
 
-    # Generate caption for separate message (HTML)
     local caption=$(generate_caption "$zip_name" "$zip_size" "$zip_sha256" "$zip_md5" "$zip_sha1")
 
     log_step "Uploading to Telegram..."
@@ -629,10 +645,8 @@ Branch: ${BRANCH:-N/A}
 Commit: ${LATEST_COMMIT:-N/A}"
 
     if command -v telegram-send &>/dev/null; then
-        # telegram-send doesn't support HTML caption, send plain text caption
         telegram-send --file "$config_file" --caption "$captionconfig" && log_success "Config sent." || log_warning "Failed to send config."
     else
-        # curl fallback with HTML caption (menggunakan newline literal)
         local caption_html="⚙️ <b>Kernel Config for $DEVICE_CODENAME</b>
 📅 Date: $(date +'%Y-%m-%d %H:%M:%S')
 📏 Size: $config_size
@@ -675,7 +689,7 @@ build_single_device() {
     install_kernelsu
     install_nomount
     configure_defconfig || return 1
-    make ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" $COMPILER_OPTION
+    kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR"
     compile_kernel || return 1
     BUILD_STATUS="success"
     patch_kpm
