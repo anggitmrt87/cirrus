@@ -1,4 +1,3 @@
-# .circleci/config.yml
 version: 2.1
 
 jobs:
@@ -9,9 +8,9 @@ jobs:
     environment:
       TZ: "Asia/Jakarta"
       LANG: "C.UTF-8"
-      LC_ALL: "C"
+      LC_ALL: "C.UTF-8"
 
-      # Kernel Configuration
+      # ---- Kernel config ----
       DEVICE_CODENAME: "chime"
       DEVICE_DEFCONFIG: "vendor/bengal-perf_defconfig vendor/extra/kernelsu.config"
       DEVICE_LIST: ""
@@ -19,19 +18,19 @@ jobs:
       BUILD_USER: "builder"
       BUILD_HOST: "mrtproject™"
       KERNEL_NAME: "Reborn-kernel"
-      KERNEL_SOURCE: "https://anggitmrt87:$GIT_TOKEN@github.com/MRT-project/kernel_xiaomi_chime_sm6115"
+
+      # ---- NO token embedded here. GIT_TOKEN is injected at clone time. ----
+      KERNEL_SOURCE: "https://github.com/MRT-project/kernel_xiaomi_chime_sm6115"
       KERNEL_BRANCH: "hyperos"
       ANYKERNEL: "https://github.com/anggitmrt87/AnyKernel3.git"
       ANYKERNEL_BRANCH: "master"
       ARCH: "arm64"
 
-      # Telegram (environment variables)
-      # TG_TOKEN and TG_CHAT_ID will be taken from the environment
+      # TG_TOKEN & TG_CHAT_ID come from CircleCI Project Environment Variables
 
-      # Toolchain
+      # ---- Toolchain ----
       USE_GCC: "false"
       USE_CLANG: "neutron"
-      ZYC_VERSION: "16.0.6-20260716"
       CLANG_ROOTDIR: "/home/circleci/project/clang"
       GCC64_ROOTDIR: "/home/circleci/project/gcc64"
       GCC32_ROOTDIR: "/home/circleci/project/gcc32"
@@ -41,7 +40,7 @@ jobs:
       GCC32_URL: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
       GCC32_BRANCH: "android-msm-redbull-4.19-android14-qpr3"
 
-      # Kernel Build
+      # ---- Build ----
       TYPE_IMAGE: "Image.gz"
       BUILD_DTBO: "true"
       DISABLE_LOCALVERSION_ST: "true"
@@ -49,7 +48,7 @@ jobs:
       DTB_PATH: "arch/arm64/boot/dts/vendor/qcom/bengal.dtb"
       GENERATE_NEW_CONFIG: "false"
 
-      # KernelSU
+      # ---- KernelSU ----
       KERNELSU: "true"
       KERNELSU_TYPE: "backslashxx"
       KERNELSU_BRANCH: "master"
@@ -58,53 +57,68 @@ jobs:
       KPM_PATCH: "false"
       KPM_VERSION: "0.13.0"
 
-      # Optimization
-      BUILD_OPTIONS: "-j4"
+      # ---- ccache ----
+      CCACHE_DIR: "/home/circleci/project/.ccache"
+      CCACHE_MAXSIZE: "5G"
 
-      # Logging
+      # ---- Misc ----
+      BUILD_OPTIONS: "-j4"
       DEBUG_MODE: "false"
       KEEP_BUILD_LOGS: "false"
-
       CIRRUS_WORKING_DIR: "/home/circleci/project"
 
     steps:
       - run:
-          name: "Checkout code"
+          name: "Checkout build scripts"
           no_output_timeout: 10m
           command: |
-            git clone "https://${GIT_TOKEN}@github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git" .
+            if [[ -n "${GIT_TOKEN:-}" ]]; then
+              git clone "https://${GIT_TOKEN}@github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git" .
+            else
+              git clone "https://github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git" .
+            fi
             git checkout "${CIRCLE_SHA1}"
 
       - run:
-          name: "🔄 Update System & Install Dependencies"
+          name: "🔄 Install dependencies"
           command: |
-            apt-get update -qq
-            apt-get install sudo -y
-            sudo apt-get update -qq
             sudo apt-get update -qq
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-              aria2 libssl-dev ncurses-dev flex bison cpio xz-utils locales libtinfo6 \
-              jq zstd python3-pip python3-venv pipx libxml2* libxml2-dev ccache
+              aria2 libssl-dev libelf-dev bc flex bison cpio xz-utils kmod rsync \
+              locales libtinfo6 jq zstd python3-pip python3-venv pipx \
+              libxml2 libxml2-dev ccache build-essential libncurses-dev \
+              device-tree-compiler wget curl git \
+              gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
             pipx ensurepath
             export PATH="$HOME/.local/bin:$PATH"
-            pipx install telegram-send
-            echo 'en_US.UTF-8 UTF-8' | sudo tee /etc/locale.gen && sudo /usr/sbin/locale-gen
+            pipx install telegram-send || pipx upgrade telegram-send
             sudo ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && echo "$TZ" | sudo tee /etc/timezone
             sudo apt-get clean
 
+      # ---- ccache restore ----
+      - restore_cache:
+          keys:
+            - v1-ccache-{{ arch }}-{{ .Branch }}-
+            - v1-ccache-{{ arch }}-
+
       - run:
-          name: "📥 Download Kernel & Toolchain"
+          name: "📥 Download kernel source & toolchain"
           command: |
             chmod +x download.sh
             ./download.sh
           no_output_timeout: 1h
 
       - run:
-          name: "🔨 Build Kernel"
+          name: "🔨 Build kernel"
           command: |
             chmod +x build.sh
             ./build.sh
           no_output_timeout: 3h
+
+      - save_cache:
+          key: v1-ccache-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - /home/circleci/project/.ccache
 
 workflows:
   version: 2

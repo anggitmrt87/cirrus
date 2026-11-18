@@ -1,37 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ------------------------------------------------------------------------------
-# 🎨 Colors and emojis
-# ------------------------------------------------------------------------------
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
-WHITE='\033[1;37m'
-NC='\033[0m'
-BOLD_RED='\033[1;31m'
-BOLD_GREEN='\033[1;32m'
-BOLD_YELLOW='\033[1;33m'
-BOLD_BLUE='\033[1;34m'
-BOLD_CYAN='\033[1;36m'
+# ==============================================================================
+# Colors & emojis
+# ==============================================================================
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m'; MAGENTA='\033[0;35m'
+WHITE='\033[1;37m'; NC='\033[0m'
+BOLD_RED='\033[1;31m'; BOLD_GREEN='\033[1;32m'; BOLD_YELLOW='\033[1;33m'
+BOLD_BLUE='\033[1;34m'; BOLD_CYAN='\033[1;36m'
 
-# ------------------------------------------------------------------------------
-# 📝 Logging helpers
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# Logging
+# ==============================================================================
 log_info()    { echo -e "${BLUE}📦 [INFO]${NC} $1"; }
 log_success() { echo -e "${BOLD_GREEN}✅ [SUCCESS]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}⚠️ [WARNING]${NC} $1"; }
 log_error()   { echo -e "${BOLD_RED}❌ [ERROR]${NC} $1" >&2; }
 log_debug()   { [[ "${DEBUG_MODE:-false}" == "true" ]] && echo -e "${CYAN}🐛 [DEBUG]${NC} $1"; }
 log_step()    { echo -e "${BOLD_CYAN}🚀 [STEP]${NC} $1"; }
-log_progress(){ echo -e "${MAGENTA}📊 [PROGRESS]${NC} $1"; }
 
-# ------------------------------------------------------------------------------
-# 🌟 Global variables (set during runtime)
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# Globals
+# ==============================================================================
 declare -g START_TIME
 declare -g BUILD_STATUS="failed"
 declare -g BUILD_LOG="${CIRRUS_WORKING_DIR:-.}/build.log"
@@ -41,22 +32,24 @@ declare -g ANYKERNEL_DIR
 declare -g DEVICE_CODENAME
 declare -g DEVICE_DEFCONFIG
 declare -ga COMPILER_OPTION=()
+declare -g _CLEANED=0
 
-# Direktori tempat skrip ini berada
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Redirect all output to log file AND console
+# Prepare log
+mkdir -p "$(dirname "$BUILD_LOG")"
+: > "$BUILD_LOG"
 exec > >(tee -a "$BUILD_LOG") 2>&1
 
-# ------------------------------------------------------------------------------
-# 🛠️  Helper functions
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# Helpers
+# ==============================================================================
 check_dependencies() {
-    local deps=("curl" "git" "make" "zip" "ccache")
+    local deps=("curl" "git" "make" "zip" "bc" "flex" "bison")
     for cmd in "${deps[@]}"; do
         if ! command -v "$cmd" &>/dev/null; then
             log_warning "Missing recommended command: $cmd"
-            [[ "$cmd" == "ccache" ]] || exit 1
+            [[ "$cmd" == "ccache" ]] || [[ "$cmd" == "bc" ]] || exit 1
         fi
     done
 }
@@ -71,16 +64,13 @@ validate_environment() {
 
     local missing=()
     for var in "${required_vars[@]}"; do
-        if [[ -z "${!var:-}" ]]; then
-            missing+=("$var")
-        fi
+        [[ -z "${!var:-}" ]] && missing+=("$var")
     done
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         log_error "Missing required environment variables: ${missing[*]}"
         exit 1
     fi
-
     log_success "Environment validation passed for device $DEVICE_CODENAME."
 }
 
@@ -90,15 +80,14 @@ setup_directories() {
     ANYKERNEL_DIR="$CIRRUS_WORKING_DIR/AnyKernel-$DEVICE_CODENAME"
 
     mkdir -p "$KERNEL_OUTDIR" "$ANYKERNEL_DIR"
-    log_info "Directories set: KERNEL_ROOTDIR=$KERNEL_ROOTDIR, OUT=$KERNEL_OUTDIR, ANYKERNEL=$ANYKERNEL_DIR"
+    log_info "Directories: ROOT=$KERNEL_ROOTDIR OUT=$KERNEL_OUTDIR AK=$ANYKERNEL_DIR"
 }
 
 setup_toolchain() {
     COMPILER_OPTION=()
 
     if [[ "${USE_GCC:-false}" == "true" ]]; then
-        # -------- GCC build --------
-        if [[ ! -d "$GCC64_ROOTDIR" || ! -d "$GCC32_ROOTDIR" ]]; then
+        if [[ ! -d "${GCC64_ROOTDIR:-}" || ! -d "${GCC32_ROOTDIR:-}" ]]; then
             log_error "GCC toolchains not found at $GCC64_ROOTDIR or $GCC32_ROOTDIR"
             exit 1
         fi
@@ -108,12 +97,12 @@ setup_toolchain() {
         COMPILER_OPTION=(
             "CROSS_COMPILE=$BUILD_CROSS_COMPILE"
             "CROSS_COMPILE_ARM32=$BUILD_CROSS_COMPILE_ARM32"
+            "INSTALL_MOD_STRIP=1"
         )
         export KBUILD_COMPILER_STRING="$(${BUILD_CROSS_COMPILE}gcc --version | head -n1)"
-        log_info "Using GCC toolchain: $KBUILD_COMPILER_STRING"
+        log_info "GCC toolchain: $KBUILD_COMPILER_STRING"
     else
-        # -------- Clang build --------
-        if [[ ! -d "$CLANG_ROOTDIR" || ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
+        if [[ ! -d "${CLANG_ROOTDIR:-}" || ! -f "$CLANG_ROOTDIR/bin/clang" ]]; then
             log_error "Clang toolchain not found at $CLANG_ROOTDIR"
             exit 1
         fi
@@ -123,29 +112,25 @@ setup_toolchain() {
         export LLD_VER="$("$bin_dir/ld.lld" --version | head -n1)"
         export KBUILD_COMPILER_STRING="$CLANG_VER with $LLD_VER"
 
-        export PATH="$CLANG_ROOTDIR/bin:${PATH}"
+        export PATH="$bin_dir:${PATH}"
 
-        # Cross-compile prefixes (sesuai perintah build yang diminta)
+        # GNU cross-compilers (installed via apt) — avoid Android-GCC mismatch
         export BUILD_CROSS_COMPILE="aarch64-linux-gnu-"
         export BUILD_CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
         export BUILD_CROSS_COMPILE_COMPAT="arm-linux-gnueabi-"
         export BUILD_CLANG_TRIPLE="aarch64-linux-gnu-"
 
-        # AOSP clang biasanya butuh GCC cross-compiler untuk beberapa tool non-LLVM
-        if [[ "${USE_CLANG:-}" == "aosp" ]]; then
-            if [[ ! -d "$GCC32_ROOTDIR" || ! -d "$GCC64_ROOTDIR" ]]; then
-                log_error "GCC toolchains missing for AOSP build"
-                exit 1
-            fi
-            export PATH="$GCC32_ROOTDIR/bin:$GCC64_ROOTDIR/bin:$PATH"
-        fi
+        # ccache
+        export CCACHE_DIR="${CCACHE_DIR:-$CIRRUS_WORKING_DIR/.ccache}"
+        export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-5G}"
+        export CCACHE_COMPRESS=true
+        mkdir -p "$CCACHE_DIR"
 
-        # Siapkan CC (pakai ccache bila tersedia)
         local cc_value="clang"
         if command -v ccache &>/dev/null; then
             cc_value="ccache clang"
         else
-            log_warning "ccache tidak ditemukan, build akan memakai plain clang (CC=clang)."
+            log_warning "ccache tidak ditemukan — build pakai plain clang."
         fi
 
         COMPILER_OPTION=(
@@ -167,19 +152,17 @@ setup_toolchain() {
     fi
 }
 
-# Wrapper make yang selalu membawa COMPILER_OPTION
 kbuild() {
     make "$@" "${COMPILER_OPTION[@]}"
 }
 
 setup_build_vars() {
-    # KBUILD_BUILD_USER dari short commit, KBUILD_BUILD_HOST dari nama branch
     local git_user git_host
     git_user="$(git -C "$KERNEL_ROOTDIR" rev-parse --short HEAD 2>/dev/null | cut -c1-7 || true)"
     git_host="$(git -C "$KERNEL_ROOTDIR" symbolic-ref --short HEAD 2>/dev/null || true)"
 
-    export KBUILD_BUILD_USER="${git_user:-${BUILD_USER:-builder}}"
-    export KBUILD_BUILD_HOST="${git_host:-${BUILD_HOST:-localhost}}"
+    export KBUILD_BUILD_USER="${BUILD_USER:-${git_user:-builder}}"
+    export KBUILD_BUILD_HOST="${BUILD_HOST:-${git_host:-localhost}}"
 
     export IMAGE="$KERNEL_OUTDIR/arch/arm64/boot/${TYPE_IMAGE:-Image.gz}"
     export DTBO="$KERNEL_OUTDIR/arch/arm64/boot/dtbo.img"
@@ -191,7 +174,7 @@ setup_build_vars() {
         export BUILD_OPTIONS="-j$NUM_CORES"
     fi
     log_info "Build options: $BUILD_OPTIONS"
-    log_info "KBUILD_BUILD_USER=$KBUILD_BUILD_USER | KBUILD_BUILD_HOST=$KBUILD_BUILD_HOST"
+    log_info "KBUILD_BUILD_USER=$KBUILD_BUILD_USER | HOST=$KBUILD_BUILD_HOST"
 }
 
 setup_telegram() {
@@ -208,28 +191,28 @@ EOF
     export BOT_DOC_URL="https://api.telegram.org/bot$TG_TOKEN/sendDocument"
 }
 
-# ------------------------------------------------------------------------------
-# 📨 Telegram functions (using telegram-send when available)
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# Telegram
+# ==============================================================================
 tg_post_msg() {
     local message="$1"
-    local parse_mode="${2:-html}"
     if command -v telegram-send &>/dev/null; then
         telegram-send --format html "$message" || log_warning "Failed to send message via telegram-send"
     else
-        curl -s -X POST "$BOT_MSG_URL" \
+        curl -sS -X POST "$BOT_MSG_URL" \
             -d chat_id="$TG_CHAT_ID" \
             -d "disable_web_page_preview=true" \
-            -d "parse_mode=$parse_mode" \
-            -d text="$message" >/dev/null || log_warning "Failed to send message (curl fallback)"
+            -d "parse_mode=html" \
+            --data-urlencode "text=$message" >/dev/null \
+            || log_warning "Failed to send message (curl fallback)"
     fi
 }
 
 tg_send_sticker() {
     local sticker_id="$1"
-    curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendSticker" \
-        -d sticker="$sticker_id" \
-        -d chat_id="$TG_CHAT_ID" >/dev/null || log_warning "Failed to send sticker"
+    curl -sS -X POST "https://api.telegram.org/bot$TG_TOKEN/sendSticker" \
+        -d sticker="$sticker_id" -d chat_id="$TG_CHAT_ID" >/dev/null \
+        || log_warning "Failed to send sticker"
 }
 
 send_failure_log() {
@@ -240,39 +223,41 @@ send_failure_log() {
     if [[ -f "$BUILD_LOG" ]]; then
         tail -100 "$BUILD_LOG" > "$log_file"
     else
-        dmesg | tail -50 > "$log_file" || echo "Unable to capture logs" > "$log_file"
+        dmesg | tail -50 > "$log_file" 2>/dev/null || echo "Unable to capture logs" > "$log_file"
     fi
 
     {
         echo -e "\n=== Build Environment ==="
-        env | grep -E "(CIRRUS|KERNEL|TG_|BUILD_|CLANG_|GCC_)"
+        env | grep -E "(CIRRUS|KERNEL|TG_|BUILD_|CLANG_|GCC_)" || true
         echo -e "\n=== System Info ==="
         uname -a
     } >> "$log_file"
 
     if [[ -f "$log_file" ]]; then
         local doc_name="build_error_${DEVICE_CODENAME}_$(date +%s).log"
+        local caption="❌ <b>Kernel Build Failed</b>
+📱 Device: <code>$DEVICE_CODENAME</code>
+🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')
+🔢 Exit Code: $exit_code"
+
         if command -v telegram-send &>/dev/null; then
             telegram-send --file "$log_file" || log_warning "Failed to send error log"
-            tg_post_msg "❌ <b>Kernel Build Failed</b>
-📱 Device: <code>$DEVICE_CODENAME</code>
-🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')
-🔢 Exit Code: $exit_code"
+            tg_post_msg "$caption"
         else
-            local caption="❌ <b>Kernel Build Failed</b>
-📱 Device: <code>$DEVICE_CODENAME</code>
-🕐 Time: $(date +'%Y-%m-%d %H:%M:%S')
-🔢 Exit Code: $exit_code"
-            curl -F document=@"$log_file" -F filename="$doc_name" "$BOT_DOC_URL" \
+            curl -sS -F document=@"$log_file" -F filename="$doc_name" "$BOT_DOC_URL" \
                 -F chat_id="$TG_CHAT_ID" \
                 -F "disable_web_page_preview=true" \
                 -F "parse_mode=html" \
-                -F caption="$caption" >/dev/null || log_warning "Failed to send error log (curl fallback)"
+                -F caption="$caption" >/dev/null \
+                || log_warning "Failed to send error log (curl fallback)"
         fi
     fi
 }
 
 cleanup() {
+    [[ "$_CLEANED" == "1" ]] && return 0
+    _CLEANED=1
+
     local exit_code=$?
     local end_time=$(date +%s)
     local build_time=$((end_time - START_TIME))
@@ -286,15 +271,15 @@ cleanup() {
         tg_send_sticker "CAACAgQAAx0EabRMmQACAnRjEUAXBTK1Ei_zbJNPFH7WCLzSdAACpBEAAqbxcR716gIrH45xdB4E"
     fi
 
-    rm -rf "$CIRRUS_WORKING_DIR"/*.tar.* "$CIRRUS_WORKING_DIR"/tmp_downloads 2>/dev/null || true
+    rm -rf "${CIRRUS_WORKING_DIR:-.}"/*.tar.* "${CIRRUS_WORKING_DIR:-.}"/tmp_downloads 2>/dev/null || true
     [[ "${KEEP_BUILD_LOGS:-false}" != "true" ]] && rm -f "$BUILD_LOG"
 
     exit "$exit_code"
 }
 
-# ------------------------------------------------------------------------------
-# 🔧 Feature installation (KernelSU, KPM, NoMount)
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# Feature installation
+# ==============================================================================
 install_kernelsu() {
     cd "$KERNEL_ROOTDIR"
     [[ "${KERNELSU:-false}" != "true" ]] && { log_info "KernelSU disabled, skipping."; return 0; }
@@ -312,7 +297,14 @@ install_kernelsu() {
     esac
 
     log_info "Installing $KERNELSU_TYPE..."
-    if ! timeout 300 bash -c "curl -LSs '$url' | bash -s '${KERNELSU_BRANCH:-}'"; then
+    local branch_arg="${KERNELSU_BRANCH:-}"
+    local cmd
+    if [[ -z "$branch_arg" ]]; then
+        cmd="curl -LSsf '$url' | bash"
+    else
+        cmd="curl -LSsf '$url' | bash -s '$branch_arg'"
+    fi
+    if ! timeout 300 bash -c "$cmd"; then
         log_warning "$KERNELSU_TYPE installation failed, continuing without it."
         return 1
     fi
@@ -324,12 +316,12 @@ install_nomount() {
     [[ "${INCLUDE_NOMOUNT:-false}" != "true" ]] && { log_info "NoMount disabled, skipping."; return 0; }
 
     log_info "Installing NoMount (maxsteeel/nomount)..."
-    if ! timeout 300 bash -c "curl -LSs 'https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh' | bash -s master"; then
+    if ! timeout 300 bash -c "curl -LSsf 'https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh' | bash -s master"; then
         log_warning "NoMount installation failed, continuing without it."
         return 1
     fi
 
-    if [[ ! -L "fs/nomount" ]] && [[ ! -d "fs/nomount" ]]; then
+    if [[ ! -L "fs/nomount" && ! -d "fs/nomount" ]]; then
         log_warning "NoMount symlink not found after setup, patch may have failed."
         return 1
     fi
@@ -343,19 +335,37 @@ patch_kpm() {
     fi
 
     log_step "Applying KPM patch (v$KPM_VERSION)..."
-    cd "$KERNEL_OUTDIR/arch/arm64/boot"
+    cd "$KERNEL_OUTDIR/arch/arm64/boot" || return 1
+
+    local original="$TYPE_IMAGE"
+    local work="$original"
+    local decompressed=0
+
+    if [[ "$original" == *.gz ]]; then
+        log_info "Decompressing $original for patching..."
+        gunzip -kf "$original" || { log_error "Failed to decompress"; return 1; }
+        work="${original%.gz}"
+        decompressed=1
+    fi
+
     local download_url="https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/$KPM_VERSION/patch_linux"
     if ! curl -L --fail -o patch_linux "$download_url"; then
         log_error "Failed to download KPM patcher."
         return 1
     fi
     chmod +x patch_linux
-    if ! ./patch_linux "$TYPE_IMAGE"; then
+
+    if ! ./patch_linux "$work"; then
         log_error "KPM patching failed."
         return 1
     fi
+
     if [[ -f "oImage" ]]; then
-        mv oImage "$TYPE_IMAGE"
+        mv oImage "$work"
+        if [[ $decompressed -eq 1 ]]; then
+            log_info "Re-compressing $work..."
+            gzip -f "$work"
+        fi
         log_success "KPM patch applied."
     else
         log_error "Patched image not found."
@@ -363,9 +373,9 @@ patch_kpm() {
     fi
 }
 
-# ------------------------------------------------------------------------------
-# 🏗️ Kernel compilation steps (per device)
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# Kernel compilation
+# ==============================================================================
 configure_defconfig() {
     cd "$KERNEL_ROOTDIR"
     log_step "Configuring defconfig for $DEVICE_CODENAME..."
@@ -378,18 +388,14 @@ configure_defconfig() {
 
     log_info "Primary defconfig: $primary"
     kbuild $BUILD_OPTIONS ARCH="$ARCH" "$primary" O="$KERNEL_OUTDIR" || {
-        log_error "Primary defconfig failed."
-        return 1
-    }
+        log_error "Primary defconfig failed."; return 1; }
 
     for frag in "${fragments[@]}"; do
         local frag_path="arch/$ARCH/configs/$frag"
         if [[ -f "$frag_path" ]]; then
             log_info "Merging $frag..."
             scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$KERNEL_OUTDIR/.config" "$frag_path" || {
-                log_error "Failed to merge $frag."
-                return 1
-            }
+                log_error "Failed to merge $frag."; return 1; }
         else
             log_warning "Fragment $frag not found, skipping."
         fi
@@ -397,35 +403,28 @@ configure_defconfig() {
 
     local external_config="$SCRIPT_DIR/config/android-base.config"
     local merge_external=false
-    if [[ "${GENERATE_NEW_CONFIG:-false}" == "true" ]]; then
-        if [[ -f "$external_config" ]]; then
-            log_info "Merging external config: $external_config"
-            scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$KERNEL_OUTDIR/.config" "$external_config" || {
-                log_error "Failed to merge external config: $external_config"
-                return 1
-            }
-            merge_external=true
-        else
-            log_warning "GENERATE_NEW_CONFIG=true tetapi file $external_config tidak ditemukan, dilewati."
-        fi
+    if [[ "${GENERATE_NEW_CONFIG:-false}" == "true" && -f "$external_config" ]]; then
+        log_info "Merging external config: $external_config"
+        scripts/kconfig/merge_config.sh -m -O "$KERNEL_OUTDIR" "$KERNEL_OUTDIR/.config" "$external_config" || {
+            log_error "Failed to merge external config: $external_config"; return 1; }
+        merge_external=true
+    elif [[ "${GENERATE_NEW_CONFIG:-false}" == "true" ]]; then
+        log_warning "GENERATE_NEW_CONFIG=true tetapi $external_config tidak ditemukan."
     fi
 
     if [[ ${#fragments[@]} -gt 0 || "$merge_external" == "true" ]]; then
         kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR" || {
-            log_error "Failed to update defconfig after merge."
-            return 1
-        }
+            log_error "Failed to update defconfig after merge."; return 1; }
     fi
-
-    kbuild $BUILD_OPTIONS ARCH="$ARCH" O="$KERNEL_OUTDIR" savedefconfig
 
     if [[ "${DISABLE_LOCALVERSION_ST:-false}" == "true" ]]; then
         log_info "Disabling LOCALVERSION_AUTO and clearing LOCALVERSION"
         if [[ -f "scripts/config" ]]; then
             scripts/config --file "$KERNEL_OUTDIR/.config" --disable LOCALVERSION_AUTO
+            scripts/config --file "$KERNEL_OUTDIR/.config" --set-str LOCALVERSION ""
         else
-            log_warning "scripts/config not found, using sed directly"
             sed -i 's/CONFIG_LOCALVERSION_AUTO=y/CONFIG_LOCALVERSION_AUTO=n/g' "$KERNEL_OUTDIR/.config"
+            sed -i 's/^CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=""/' "$KERNEL_OUTDIR/.config" 2>/dev/null || true
         fi
         kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR"
         log_success "LOCALVERSION_AUTO disabled."
@@ -436,26 +435,25 @@ configure_defconfig() {
         if [[ -f "scripts/config" ]]; then
             scripts/config --file "$KERNEL_OUTDIR/.config" --enable NOMOUNT
         else
-            if ! grep -q "^CONFIG_NOMOUNT=y" "$KERNEL_OUTDIR/.config"; then
-                echo "CONFIG_NOMOUNT=y" >> "$KERNEL_OUTDIR/.config"
-            fi
+            grep -q "^CONFIG_NOMOUNT=y" "$KERNEL_OUTDIR/.config" || echo "CONFIG_NOMOUNT=y" >> "$KERNEL_OUTDIR/.config"
         fi
         kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR"
         log_success "CONFIG_NOMOUNT enabled."
     fi
 
     if [[ "${DISABLE_CLANG_LTO:-false}" == "true" ]]; then
-        log_info "DISABLE CLANG LTO"
+        log_info "Disabling Clang LTO/CFI"
         if [[ -f "scripts/config" ]]; then
-            scripts/config --file "$KERNEL_OUTDIR/.config" --disable CONFIG_LTO_CLANG
-            scripts/config --file "$KERNEL_OUTDIR/.config" --disable CONFIG_CFI_CLANG
-            scripts/config --file "$KERNEL_OUTDIR/.config" --disable CONFIG_LTO
-            scripts/config --file "$KERNEL_OUTDIR/.config" --enable CONFIG_LTO_NONE
+            scripts/config --file "$KERNEL_OUTDIR/.config" --disable LTO_CLANG
+            scripts/config --file "$KERNEL_OUTDIR/.config" --disable CFI_CLANG
+            scripts/config --file "$KERNEL_OUTDIR/.config" --disable LTO
+            scripts/config --file "$KERNEL_OUTDIR/.config" --enable LTO_NONE
+            kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR"
+            log_success "LTO disabled."
         else
-            log_error "Disable LTO failed."
+            log_error "scripts/config not found — disable LTO failed."
+            return 1
         fi
-        kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR"
-        log_success "LTO disable."
     fi
 }
 
@@ -488,9 +486,7 @@ prepare_anykernel() {
     log_step "Preparing AnyKernel for $DEVICE_CODENAME..."
     rm -rf "$ANYKERNEL_DIR"
     git clone --depth=1 -b "$ANYKERNEL_BRANCH" "$ANYKERNEL" "$ANYKERNEL_DIR" || {
-        log_error "Failed to clone AnyKernel repo."
-        return 1
-    }
+        log_error "Failed to clone AnyKernel repo."; return 1; }
     cd "$ANYKERNEL_DIR"
 
     if [[ "${BUILD_DTBO:-false}" == "true" ]]; then
@@ -518,15 +514,15 @@ collect_build_info() {
     export COMMIT_BY=$(git log --pretty=format:'by %an' -1 2>/dev/null | head -c 50 || echo "N/A")
     export BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "N/A")
     export COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "N/A")
-    export KERNEL_SOURCE_SHORT=$(echo "$KERNEL_SOURCE" | sed -E 's|https://github.com/([^/]+/[^/.]+).*|\1|i')
+    # Strip credentials from origin URL, then take owner/repo
+    export KERNEL_SOURCE_SHORT=$(git remote get-url origin 2>/dev/null \
+        | sed -E 's|https://[^@]+@|https://|' \
+        | sed -E 's|\.git$||' \
+        | sed -E 's|.*github\.com/([^/]+/[^/]+).*|\1|')
 }
 
 generate_caption() {
-    local zip_name="$1"
-    local zip_size="$2"
-    local zip_sha256="$3"
-    local zip_md5="$4"
-    local zip_sha1="$5"
+    local zip_size="$1"
 
     local end_time=$(date +%s)
     local build_time=$((end_time - START_TIME))
@@ -542,24 +538,15 @@ generate_caption() {
     fi
 
     local kernelsu_status="❌ Disabled"
-    if [[ "${KERNELSU:-false}" == "true" && -n "${KERNELSU_TYPE:-}" ]]; then
-        kernelsu_status="✅ ${KERNELSU_TYPE} (${KERNELSU_BRANCH:-hookless})"
-    fi
+    [[ "${KERNELSU:-false}" == "true" && -n "${KERNELSU_TYPE:-}" ]] \
+        && kernelsu_status="✅ ${KERNELSU_TYPE} (${KERNELSU_BRANCH:-hookless})"
 
     local kpm_status="❌ Disabled"
-    if [[ "${KPM_PATCH:-false}" == "true" && "${KERNELSU:-false}" == "true" ]]; then
-        kpm_status="✅ v${KPM_VERSION}"
-    fi
+    [[ "${KPM_PATCH:-false}" == "true" && "${KERNELSU:-false}" == "true" ]] \
+        && kpm_status="✅ v${KPM_VERSION}"
 
     local nomount_status="❌ Disabled"
-    if [[ "${INCLUDE_NOMOUNT:-false}" == "true" ]]; then
-        nomount_status="✅ Enabled (maxsteeel/nomount)"
-    fi
-
-    local commit_link=""
-    if [[ -n "$KERNEL_SOURCE_SHORT" && -n "$COMMIT_HASH" ]]; then
-        commit_link="🔗 <a href=\"https://github.com/$KERNEL_SOURCE_SHORT/commit/$COMMIT_HASH\">View Commit</a>"
-    fi
+    [[ "${INCLUDE_NOMOUNT:-false}" == "true" ]] && nomount_status="✅ Enabled (maxsteeel/nomount)"
 
     cat <<EOF
 ✨ <b>🚀 KERNEL BUILD SUCCESSFULLY!</b> ✨
@@ -586,40 +573,37 @@ create_and_upload_zip() {
     local zip_name="$KERNEL_NAME-$DEVICE_CODENAME-$DATE.zip"
 
     log_step "Creating ZIP archive: $zip_name"
-    if ! zip -r9 "$zip_name" . -x "*.git*" "README.md" ".github/*"; then
+    if ! zip -r9 "$zip_name" . -x ".git/*" ".github/*" "README.md" "*.gitignore"; then
         log_error "ZIP creation failed."
         return 1
     fi
 
     local zip_size=$(du -h "$zip_name" | cut -f1)
-    local zip_size_bytes=$(stat -c%s "$zip_name" 2>/dev/null || stat -f%z "$zip_name" 2>/dev/null)
+    local zip_size_bytes=$(stat -c%s "$zip_name" 2>/dev/null || stat -f%z "$zip_name" 2>/dev/null || echo 0)
     local max_size=$((50 * 1024 * 1024))
     if [[ $zip_size_bytes -gt $max_size ]]; then
         log_error "ZIP size ($zip_size) exceeds Telegram limit (50 MB). Upload skipped."
         return 1
     fi
 
-    local zip_sha1=$(sha1sum "$zip_name" | cut -d' ' -f1)
-    local zip_md5=$(md5sum "$zip_name" | cut -d' ' -f1)
-    local zip_sha256=$(sha256sum "$zip_name" | cut -d' ' -f1)
-
-    local caption=$(generate_caption "$zip_name" "$zip_size" "$zip_sha256" "$zip_md5" "$zip_sha1")
+    local caption=$(generate_caption "$zip_size")
+    # Telegram caption limit = 1024 chars
+    if [[ ${#caption} -gt 1000 ]]; then
+        caption="${caption:0:1000}…"
+    fi
 
     log_step "Uploading to Telegram..."
     local upload_success=false
-    for i in {1..3}; do
-        if command -v telegram-send &>/dev/null; then
-            if telegram-send --format html --file "$zip_name" --caption "$caption"; then
-                upload_success=true
-                break
-            fi
-        else
-            if telegram-send --file "$zip_name"; then
-                upload_success=true
-                break
-            fi
+    for i in 1 2 3; do
+        if curl -sS -F document=@"$zip_name" -F filename="$zip_name" "$BOT_DOC_URL" \
+                -F chat_id="$TG_CHAT_ID" \
+                -F "disable_web_page_preview=true" \
+                -F "parse_mode=html" \
+                -F caption="$caption" >/dev/null 2>&1; then
+            upload_success=true
+            break
         fi
-        log_warning "Upload attempt $i failed. Retrying in 5s..."
+        log_warning "Upload attempt $i/3 failed. Retrying in 5s..."
         sleep 5
     done
 
@@ -637,33 +621,36 @@ send_config() {
 
     local config_size=$(du -h "$config_file" | cut -f1)
     local config_name="config-${DEVICE_CODENAME}-${DATE}.txt"
-    local captionconfig="⚙️ Kernel Config for $DEVICE_CODENAME
-Date: $(date +'%Y-%m-%d %H:%M:%S')
-Size: $config_size
-Compiler: $KBUILD_COMPILER_STRING
-Branch: ${BRANCH:-N/A}
-Commit: ${LATEST_COMMIT:-N/A}"
-
-    if command -v telegram-send &>/dev/null; then
-        telegram-send --file "$config_file" --caption "$captionconfig" && log_success "Config sent." || log_warning "Failed to send config."
-    else
-        local caption_html="⚙️ <b>Kernel Config for $DEVICE_CODENAME</b>
+    local caption_html="⚙️ <b>Kernel Config for $DEVICE_CODENAME</b>
 📅 Date: $(date +'%Y-%m-%d %H:%M:%S')
 📏 Size: $config_size
-🔧 Compiler: $KBUILD_COMPILER_STRING
+🔧 Compiler: ${KBUILD_COMPILER_STRING:-N/A}
 🌿 Branch: ${BRANCH:-N/A}
 📝 Commit: ${LATEST_COMMIT:-N/A}"
-        curl -F document=@"$config_file" -F filename="$config_name" "$BOT_DOC_URL" \
+
+    if command -v telegram-send &>/dev/null; then
+        # telegram-send caption doesn't support HTML; use plain text
+        local caption_plain=$(echo "$caption_html" | sed -E 's/<[^>]+>//g')
+        if telegram-send --file "$config_file" --caption "$caption_plain" 2>/dev/null; then
+            log_success "Config sent."
+            return 0
+        fi
+    fi
+
+    if curl -sS -F document=@"$config_file" -F filename="$config_name" "$BOT_DOC_URL" \
             -F chat_id="$TG_CHAT_ID" \
             -F "disable_web_page_preview=true" \
             -F "parse_mode=html" \
-            -F caption="$caption_html" >/dev/null && log_success "Config sent." || log_warning "Failed to send config."
+            -F caption="$caption_html" >/dev/null 2>&1; then
+        log_success "Config sent."
+    else
+        log_warning "Failed to send config."
     fi
 }
 
-# ------------------------------------------------------------------------------
-# 📦 Build a single device (core build logic)
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# Per-device build
+# ==============================================================================
 build_single_device() {
     local codename="$1"
     local defconfig_str="$2"
@@ -680,6 +667,16 @@ build_single_device() {
     setup_toolchain
     setup_build_vars
 
+    # Safety: ensure kernel source exists
+    if [[ ! -d "$KERNEL_ROOTDIR/.git" ]]; then
+        log_warning "Kernel source missing for $DEVICE_CODENAME — cloning..."
+        local clone_url="$KERNEL_SOURCE"
+        [[ -n "${GIT_TOKEN:-}" ]] && clone_url=$(echo "$KERNEL_SOURCE" | sed -E "s|^(https://)|\1${GIT_TOKEN}@|")
+        git clone --depth=1 --recurse-submodules --shallow-submodules \
+            --branch "$KERNEL_BRANCH" "$clone_url" "$KERNEL_ROOTDIR" \
+            || { log_error "Failed to clone kernel source."; return 1; }
+    fi
+
     tg_post_msg "🚀 <b>Kernel Build Started for $DEVICE_CODENAME</b>
 
 📱 Device: <code>$DEVICE_CODENAME</code>
@@ -689,9 +686,7 @@ build_single_device() {
     install_kernelsu
     install_nomount
     configure_defconfig || return 1
-    kbuild ARCH=arm64 olddefconfig O="$KERNEL_OUTDIR"
     compile_kernel || return 1
-    BUILD_STATUS="success"
     patch_kpm
     prepare_anykernel || return 1
     collect_build_info
@@ -702,9 +697,9 @@ build_single_device() {
     return 0
 }
 
-# ------------------------------------------------------------------------------
-# 🚀 Main orchestration (multi-device or single)
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# Main
+# ==============================================================================
 main() {
     echo -e "${BOLD_CYAN}"
     echo "╔═══════════════════════════════════════╗"
@@ -713,35 +708,33 @@ main() {
     echo -e "${NC}"
 
     START_TIME=$(date +%s)
-    > "$BUILD_LOG"
 
     check_dependencies
     setup_telegram
+    validate_environment
 
-    local devices=()
+    local -a devices=()
     if [[ -n "${DEVICE_LIST:-}" ]]; then
         IFS=',' read -ra entries <<< "$DEVICE_LIST"
         for entry in "${entries[@]}"; do
             entry=$(echo "$entry" | xargs)
-            if [[ -n "$entry" ]]; then
-                if [[ "$entry" == *":"* ]]; then
-                    codename="${entry%%:*}"
-                    defconfig="${entry#*:}"
-                    defconfig=$(echo "$defconfig" | xargs)
-                    devices+=("$codename|$defconfig")
-                else
-                    log_error "Invalid entry in DEVICE_LIST: '$entry' (expected 'codename:defconfig')"
-                    exit 1
-                fi
+            [[ -z "$entry" ]] && continue
+            if [[ "$entry" == *":"* ]]; then
+                local codename="${entry%%:*}"
+                local defconfig="${entry#*:}"
+                defconfig=$(echo "$defconfig" | xargs)
+                [[ -z "$defconfig" ]] && defconfig="$DEVICE_DEFCONFIG"
+                devices+=("$codename|$defconfig")
+            else
+                log_error "Invalid entry in DEVICE_LIST: '$entry' (expected 'codename:defconfig')"
+                exit 1
             fi
         done
+    elif [[ -n "${DEVICE_CODENAME:-}" && -n "${DEVICE_DEFCONFIG:-}" ]]; then
+        devices=("$DEVICE_CODENAME|$DEVICE_DEFCONFIG")
     else
-        if [[ -n "${DEVICE_CODENAME:-}" && -n "${DEVICE_DEFCONFIG:-}" ]]; then
-            devices=("$DEVICE_CODENAME|$DEVICE_DEFCONFIG")
-        else
-            log_error "Neither DEVICE_LIST nor (DEVICE_CODENAME & DEVICE_DEFCONFIG) are set."
-            exit 1
-        fi
+        log_error "Neither DEVICE_LIST nor (DEVICE_CODENAME & DEVICE_DEFCONFIG) are set."
+        exit 1
     fi
 
     if [[ ${#devices[@]} -eq 0 ]]; then
@@ -755,7 +748,7 @@ main() {
         log_info "  - $codename: $defconfig"
     done
 
-    local failed_devices=()
+    local -a failed_devices=()
     for dev in "${devices[@]}"; do
         IFS='|' read -r codename defconfig <<< "$dev"
         if ! build_single_device "$codename" "$defconfig"; then
@@ -765,10 +758,12 @@ main() {
     done
 
     if [[ ${#failed_devices[@]} -eq 0 ]]; then
+        BUILD_STATUS="success"
         log_success "All devices built successfully!"
         tg_post_msg "✅ <b>All kernel builds completed successfully!</b>
 📱 Devices: ${#devices[@]}"
     else
+        BUILD_STATUS="failed"
         log_error "Build failed for devices: ${failed_devices[*]}"
         tg_post_msg "❌ <b>Some builds failed</b>
 Failed: ${failed_devices[*]}"
@@ -776,8 +771,7 @@ Failed: ${failed_devices[*]}"
     fi
 }
 
-# ------------------------------------------------------------------------------
-# 🎯 Trap signals and run
-# ------------------------------------------------------------------------------
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 main "$@"
